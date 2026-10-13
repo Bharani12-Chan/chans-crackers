@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "npm install --prefix client && npm install --prefix server && npm run build --prefix client",
+    "build": "npm install --prefix client --include=dev && npm install --prefix server && npm run build --prefix client",
     "start": "npm start --prefix server",
     "dev:client": "npm run dev --prefix client",
     "dev:server": "npm run dev --prefix server"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   }
 }
