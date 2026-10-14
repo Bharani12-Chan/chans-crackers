@@ -1,45 +1,41 @@
 
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  Plus,
+  ShoppingCart,
   ArrowUpRight,
   PackageCheck
 } from "lucide-react";
 
 import {
-  useStore,
+  useCart,
+  productId,
   money
-} from "../context/StoreContext";
+} from "../context/CartContext";
 
 import {
-  getProductId,
   getProductImage
 } from "../data/categories";
 
 import "../catalog.css";
 
-const FALLBACK =
-  "https://placehold.co/900x700/ede9fe/4c1d95?text=Chan%27s+Crackers";
-
 export default function ProductCard({ product }) {
-  const { addCart } = useStore();
+  const navigate = useNavigate();
+  const { addItem } = useCart();
 
-  const id = getProductId(product);
+  const id = productId(product);
+  const stock = Number(product.stock || 0);
   const price = Number(product.price || 0);
   const oldPrice = Number(product.oldPrice || 0);
-  const stock = Number(product.stock || 0);
 
   const discount =
-    oldPrice > price && oldPrice > 0
-      ? Math.round(
-          ((oldPrice - price) / oldPrice) * 100
-        )
+    oldPrice > price
+      ? Math.round(((oldPrice - price) / oldPrice) * 100)
       : 0;
 
-  const handleAddToCart = () => {
-    if (id && stock > 0) {
-      addCart(id, 1);
+  const handleAdd = () => {
+    if (addItem(product, 1)) {
+      navigate("/cart");
     }
   };
 
@@ -53,11 +49,6 @@ export default function ProductCard({ product }) {
           src={getProductImage(product)}
           alt={product.name}
           loading="lazy"
-          onError={(event) => {
-            if (event.currentTarget.src !== FALLBACK) {
-              event.currentTarget.src = FALLBACK;
-            }
-          }}
         />
 
         {product.badge && (
@@ -79,25 +70,24 @@ export default function ProductCard({ product }) {
         </span>
 
         <Link
-          className="product-name"
           to={`/product/${id}`}
+          className="product-name"
         >
           {product.name}
         </Link>
 
         <p className="catalog-product-description">
-          {product.description ||
-            "Explore this festive collection."}
+          {product.description}
         </p>
 
         <div
           className={`catalog-stock ${
-            stock <= 0 ? "out" : ""
+            stock === 0 ? "out" : ""
           }`}
         >
           <PackageCheck size={15} />
           {stock > 0
-            ? `${stock} in stock`
+            ? `${stock} available`
             : "Out of stock"}
         </div>
 
@@ -115,20 +105,21 @@ export default function ProductCard({ product }) {
           <button
             type="button"
             className="add-btn"
-            disabled={stock <= 0 || !id}
+            onClick={handleAdd}
+            disabled={!id || stock <= 0}
+            title="Add to cart"
             aria-label={`Add ${product.name} to cart`}
-            onClick={handleAddToCart}
           >
-            <Plus size={21} />
+            <ShoppingCart size={19} />
           </button>
         </div>
 
         <Link
-          className="catalog-view-link"
           to={`/product/${id}`}
+          className="catalog-view-link"
         >
-          View Product
-          <ArrowUpRight size={15} />
+          View Details
+          <ArrowUpRight size={16} />
         </Link>
       </div>
     </article>

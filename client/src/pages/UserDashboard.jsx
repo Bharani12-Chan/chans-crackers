@@ -1,148 +1,172 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import {
-  ShoppingBag, Package, CheckCircle2,
-  Clock3, ArrowRight, UserRound
-} from "lucide-react";
-import { useStore, money } from "../context/StoreContext";
-import PageBanner from "../components/PageBanner";
-import StatCard from "../components/StatCard";
-import EmptyState from "../components/EmptyState";
 
-const dateText = value =>
-  new Date(value).toLocaleDateString("en-IN", {
-    day: "numeric", month: "short", year: "numeric"
-  });
+import React, { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { api, useStore } from "../context/StoreContext";
+import { money } from "../context/CartContext";
 
 export default function UserDashboard() {
-  const { user, api, cartCount } = useStore();
-  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const { session, logout } = useStore();
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    api("/orders/my")
-      .then(data => setOrders(data.orders || []))
-      .catch(error => setError(error.message))
-      .finally(() => setLoading(false));
-  }, [api]);
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    setError("");
 
-  const completed = orders.filter(
-    order => order.status === "Completed"
-  ).length;
+    try {
+      const data = await api("/api/orders/my");
+      setOrders(data.orders || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    setError("");
+
+    try {
+      await logout();
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  const total = orders.reduce(
+    (sum, order) => sum + Number(order.total || 0),
+    0
+  );
 
   return (
-    <>
-      <PageBanner
-        eyebrow="YOUR PERSONAL SPACE"
-        title={`Hello, ${user?.name?.split(" ")[0] || "Customer"}!`}
-        description="Track your orders, review your shopping history and explore more."
-      />
+    <main className="page-shell content-page">
+      <header className="dashboard-header">
+        <div>
+          <span className="eyebrow">CUSTOMER ACCOUNT</span>
+          <h1>My Dashboard</h1>
+          <p>Welcome, {session?.name || "Customer"}!</p>
+        </div>
 
-      <section className="section container">
-        {params.get("ordered") === "1" && (
-          <div className="alert success">
-            <CheckCircle2 size={22} />
-            Your demo order has been placed successfully!
-            No payment was charged.
+        <button
+          type="button"
+          className="logout-btn"
+          onClick={handleLogout}
+          disabled={loggingOut}
+        >
+          ↪ {loggingOut ? "Logging Out..." : "Logout"}
+        </button>
+      </header>
+
+      <div className="stats-grid">
+        <div className="stat-card">
+          <span>Total Orders</span>
+          <strong>{orders.length}</strong>
+        </div>
+
+        <div className="stat-card">
+          <span>Demo Order Value</span>
+          <strong>{money(total)}</strong>
+        </div>
+      </div>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>My Orders</h2>
+
+          <button
+            type="button"
+            className="outline-btn"
+            onClick={loadOrders}
+            disabled={loading}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {error && (
+          <div className="alert-error" role="alert">
+            {error}
           </div>
         )}
 
-        {error && <div className="alert error">{error}</div>}
-
-        <div className="dashboard-stats">
-          <StatCard icon={Package} label="Total Orders" value={orders.length} />
-          <StatCard icon={Clock3} label="Active Orders"
-            value={orders.filter(o =>
-              ["Placed", "Processing"].includes(o.status)
-            ).length}
-          />
-          <StatCard icon={CheckCircle2} label="Completed" value={completed} />
-          <StatCard icon={ShoppingBag} label="Items in Cart" value={cartCount} />
-        </div>
-
-        <div className="customer-layout">
-          <div className="card-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">YOUR PURCHASE JOURNEY</span>
-                <h2>My Orders</h2>
-              </div>
-              <Link className="btn btn-outline btn-sm" to="/shop">
-                Shop More <ArrowRight size={16} />
-              </Link>
-            </div>
-
-            {loading ? (
-              <p>Loading your orders...</p>
-            ) : orders.length ? (
-              <div className="order-list">
-                {orders.map(order => (
-                  <article className="order-card" key={order._id}>
-                    <div className="order-card-top">
-                      <div>
-                        <small>ORDER #{order._id.slice(-8).toUpperCase()}</small>
-                        <h3>{dateText(order.createdAt)}</h3>
-                      </div>
-                      <span className={`status status-${order.status.toLowerCase()}`}>
-                        {order.status}
-                      </span>
-                    </div>
-
-                    <div className="order-products">
-                      {order.items.map((item, index) => (
-                        <div key={index}>
-                          <span>{item.name} × {item.quantity}</span>
-                          <strong>{money(item.price * item.quantity)}</strong>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="order-card-bottom">
-                      <span>{order.items.length} product lines</span>
-                      <strong>Total: {money(order.total)}</strong>
-                    </div>
-                    <p className="small-note">
-                      Payment: {order.paymentStatus || "Demo Only"}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="You haven't placed an order yet"
-                description="Your orders will appear here after demo checkout."
-              />
-            )}
+        {loading ? (
+          <p>Loading orders...</p>
+        ) : orders.length === 0 ? (
+          <div className="empty-state">
+            <h3>No Orders Yet</h3>
+            <p>
+              Your demo purchases will appear here.
+            </p>
+            <Link to="/shop" className="primary-btn">
+              Start Shopping
+            </Link>
           </div>
+        ) : (
+          <div className="order-list">
+            {orders.map((order) => (
+              <article className="order-card" key={order._id}>
+                <div className="order-heading">
+                  <div>
+                    <small>ORDER</small>
+                    <h3>
+                      #{String(order._id)
+                        .slice(-8)
+                        .toUpperCase()}
+                    </h3>
+                    <p className="muted">
+                      {new Date(
+                        order.createdAt
+                      ).toLocaleString("en-IN")}
+                    </p>
+                  </div>
 
-          <aside className="dashboard-side">
-            <div className="card-panel">
-              <UserRound className="side-icon" />
-              <h3>Account Details</h3>
-              <p><strong>{user?.name}</strong></p>
-              <p>{user?.email}</p>
-              <span className="status status-completed">Customer Account</span>
-            </div>
+                  <span className="status-pill">
+                    {order.status}
+                  </span>
+                </div>
 
-            <div className="card-panel">
-              <h3>How to Order</h3>
-              <ol className="steps-list">
-                <li>Browse the product collection</li>
-                <li>Open a product and choose quantity</li>
-                <li>Add your favorites to the cart</li>
-                <li>Review the cart and proceed</li>
-                <li>Enter details and place a demo order</li>
-                <li>Track progress from this dashboard</li>
-              </ol>
-              <Link to="/shop" className="btn btn-primary btn-full">
-                Explore Products <ArrowRight size={17} />
-              </Link>
-            </div>
-          </aside>
-        </div>
+                <div className="order-products">
+                  {(order.items || []).map((item, index) => (
+                    <div
+                      className="summary-line"
+                      key={`${order._id}-${index}`}
+                    >
+                      <span>
+                        {item.name} × {item.quantity}
+                      </span>
+
+                      <strong>
+                        {money(item.price * item.quantity)}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="order-footer">
+                  <span>
+                    Payment:{" "}
+                    <strong>{order.paymentStatus}</strong>
+                  </span>
+
+                  <strong>{money(order.total)}</strong>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
-    </>
+    </main>
   );
 }

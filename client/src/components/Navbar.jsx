@@ -1,101 +1,120 @@
-import { useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+
+import React, { useEffect, useState } from "react";
 import {
-  Menu, X, ShoppingBag, UserRound,
-  Sparkles, LogOut
+  Link,
+  NavLink,
+  useLocation
+} from "react-router-dom";
+
+import {
+  Sparkles,
+  ShoppingBag,
+  Menu,
+  X,
+  LogOut
 } from "lucide-react";
+
 import { useStore } from "../context/StoreContext";
+import { useCart } from "../context/CartContext";
+
+import "../catalog.css";
 
 export default function Navbar() {
-  const { user, cartCount, logout, setNotice } = useStore();
-  const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
+  const { session, logout } = useStore();
+  const { cartCount } = useCart();
 
-  async function signOut() {
-    try {
-      await logout();
-      setNotice("You have logged out successfully");
-      navigate("/");
-    } catch (error) {
-      setNotice(error.message);
-    }
-  }
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname, location.search]);
 
   return (
-    <>
-      <div className="top-strip">
-        Celebrate responsibly • Festive shopping demo • No real payments
-      </div>
+    <header className="site-header catalog-site-header">
+      <div className="catalog-container catalog-navbar">
+        <Link to="/" className="brand">
+          <span className="brand-icon">
+            <Sparkles size={23} />
+          </span>
 
-      <header className="site-header">
-        <div className="container nav-inner">
-          <Link to="/" className="brand" onClick={() => setOpen(false)}>
-            <span className="brand-icon"><Sparkles size={24} /></span>
-            <span>
-              <strong>CHAN'S</strong>
-              <small>CRACKERS</small>
-            </span>
+          <span>
+            CHAN'S
+            <small>CRACKERS</small>
+          </span>
+        </Link>
+
+        <nav
+          className={`catalog-nav-links ${
+            menuOpen ? "is-open" : ""
+          }`}
+          aria-label="Main navigation"
+          id="catalog-mobile-menu"
+        >
+          <NavLink to="/" end>
+            Home
+          </NavLink>
+
+          <NavLink to="/shop">
+            Shop
+          </NavLink>
+
+          {session && (
+            <NavLink
+              to={
+                session.role === "admin"
+                  ? "/admin"
+                  : "/dashboard"
+              }
+            >
+              Dashboard
+            </NavLink>
+          )}
+        </nav>
+
+        <div className="catalog-nav-actions">
+          {session ? (
+            <button
+              type="button"
+              className="catalog-nav-login"
+              onClick={logout}
+            >
+              <LogOut size={17} />
+              <span>Logout</span>
+            </button>
+          ) : (
+            <Link
+              to="/login"
+              className="catalog-nav-login"
+            >
+              Login
+            </Link>
+          )}
+
+          <Link
+            to="/cart"
+            className="catalog-nav-cart"
+            aria-label={`View cart with ${cartCount} items`}
+          >
+            <ShoppingBag size={19} />
+            <span>Cart</span>
+            <strong>{cartCount}</strong>
           </Link>
 
           <button
-            className="mobile-menu"
-            onClick={() => setOpen(!open)}
+            type="button"
+            className="catalog-mobile-menu-button"
             aria-label="Toggle navigation"
+            aria-expanded={menuOpen}
+            aria-controls="catalog-mobile-menu"
+            onClick={() =>
+              setMenuOpen((previous) => !previous)
+            }
           >
-            {open ? <X /> : <Menu />}
+            {menuOpen ? <X size={23} /> : <Menu size={23} />}
           </button>
-
-          <nav className={`nav-links ${open ? "open" : ""}`}>
-            <NavLink to="/" onClick={() => setOpen(false)}>Home</NavLink>
-            <NavLink to="/shop" onClick={() => setOpen(false)}>Shop</NavLink>
-
-            {user?.role === "customer" && (
-              <NavLink to="/dashboard" onClick={() => setOpen(false)}>
-                My Orders
-              </NavLink>
-            )}
-
-            {user?.role === "admin" && (
-              <NavLink to="/admin" onClick={() => setOpen(false)}>
-                Admin Panel
-              </NavLink>
-            )}
-          </nav>
-
-          <div className="nav-actions">
-            {user ? (
-              <>
-                <Link
-                  className="icon-action"
-                  to={user.role === "admin" ? "/admin" : "/dashboard"}
-                  title="Dashboard"
-                >
-                  <UserRound size={20} />
-                </Link>
-                <button
-                  className="icon-action"
-                  onClick={signOut}
-                  title="Log out"
-                >
-                  <LogOut size={19} />
-                </button>
-              </>
-            ) : (
-              <Link to="/login" className="btn btn-outline btn-sm">
-                Login
-              </Link>
-            )}
-
-            {user?.role !== "admin" && (
-              <Link to="/cart" className="cart-button">
-                <ShoppingBag size={19} />
-                <span>Cart</span>
-                <b>{cartCount}</b>
-              </Link>
-            )}
-          </div>
         </div>
-      </header>
-    </>
+      </div>
+    </header>
   );
 }

@@ -13,7 +13,15 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
+// ==========================================
+// DATABASE CONNECTION
+// ==========================================
+
 import { connectDB } from "./config/db.js";
+
+// ==========================================
+// EXISTING ROUTES
+// ==========================================
 
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
@@ -21,7 +29,14 @@ import orderRoutes from "./routes/orderRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 
 // ==========================================
-// APPLICATION CONFIGURATION
+// NEW ROUTES
+// ==========================================
+
+import sessionRoutes from "./routes/sessionRoutes.js";
+import adminOrderRoutes from "./routes/adminOrderRoutes.js";
+
+// ==========================================
+// EXPRESS APPLICATION
 // ==========================================
 
 const app = express();
@@ -40,7 +55,7 @@ const clientDist = path.resolve(
 );
 
 // ==========================================
-// CHECK ENVIRONMENT VARIABLES
+// ENVIRONMENT VALIDATION
 // ==========================================
 
 if (!process.env.MONGO_URI) {
@@ -62,7 +77,7 @@ if (process.env.SESSION_SECRET.length < 32) {
 }
 
 // ==========================================
-// TRUST RENDER PROXY
+// RENDER PROXY CONFIGURATION
 // ==========================================
 
 if (production) {
@@ -72,7 +87,7 @@ if (production) {
 app.disable("x-powered-by");
 
 // ==========================================
-// SECURITY MIDDLEWARE
+// SECURITY HEADERS
 // ==========================================
 
 app.use(
@@ -85,9 +100,12 @@ app.use(
 // CORS CONFIGURATION
 // ==========================================
 
-// Development frontend on port 5173.
-// Production React is served from the same
-// origin as Express, so CORS is unnecessary.
+// Development:
+// React Vite runs on localhost:5173.
+// Express runs on localhost:5000.
+//
+// Production:
+// React and Express use the same origin.
 
 if (!production) {
   app.use(
@@ -95,6 +113,7 @@ if (!production) {
       origin:
         process.env.CLIENT_URL ||
         "http://localhost:5173",
+
       credentials: true
     })
   );
@@ -116,7 +135,9 @@ app.use(
 
 const store = MongoStore.create({
   mongoUrl: process.env.MONGO_URI,
+
   collectionName: "sessions",
+
   ttl: 7 * 24 * 60 * 60
 });
 
@@ -151,20 +172,18 @@ app.use(
 );
 
 // ==========================================
-// FIXED REQUEST ORIGIN VALIDATION
+// API REQUEST ORIGIN VALIDATION
 // ==========================================
 
-// Allows:
-// 1. http://localhost:5000
-// 2. http://localhost:5173 in development
-// 3. Your actual Render domain
+// Protect state-changing API requests.
+// GET, HEAD and OPTIONS remain readable.
 //
-// Blocks unrelated origins for
-// state-changing API requests.
+// Accepted origins:
+// - The Express server itself
+// - The Vite development frontend
+// - The deployed Render domain (same origin)
 
 app.use("/api", (req, res, next) => {
-
-  // Read-only requests can proceed.
   if (
     ["GET", "HEAD", "OPTIONS"].includes(req.method)
   ) {
@@ -172,7 +191,6 @@ app.use("/api", (req, res, next) => {
   }
 
   const origin = req.get("origin");
-
   const referer = req.get("referer");
 
   if (!origin && !referer) {
@@ -182,19 +200,15 @@ app.use("/api", (req, res, next) => {
   }
 
   try {
-
     const requestOrigin = new URL(
       origin || referer
     ).origin;
 
-    // req.get("host") contains the hostname
-    // and port used to access Express.
     const serverOrigin =
       `${req.protocol}://${req.get("host")}`;
 
     const allowedOrigins = [serverOrigin];
 
-    // Vite development frontend.
     if (!production) {
       allowedOrigins.push(
         process.env.CLIENT_URL ||
@@ -202,7 +216,6 @@ app.use("/api", (req, res, next) => {
       );
     }
 
-    // Reject requests from other origins.
     if (!allowedOrigins.includes(requestOrigin)) {
       return res.status(403).json({
         message: "Request origin not allowed"
@@ -210,18 +223,15 @@ app.use("/api", (req, res, next) => {
     }
 
     next();
-
-  } catch (error) {
-
+  } catch {
     return res.status(403).json({
       message: "Invalid request origin"
     });
-
   }
 });
 
 // ==========================================
-// LOGIN RATE LIMITING
+// AUTHENTICATION RATE LIMITER
 // ==========================================
 
 const authLimiter = rateLimit({
@@ -244,7 +254,6 @@ const authLimiter = rateLimit({
 // ==========================================
 
 app.get("/api/health", (req, res) => {
-
   res.json({
     success: true,
 
@@ -256,9 +265,10 @@ app.get("/api/health", (req, res) => {
         : "Disconnected",
 
     environment:
-      production ? "production" : "development"
+      production
+        ? "production"
+        : "development"
   });
-
 });
 
 // ==========================================
@@ -281,8 +291,24 @@ app.use(
 );
 
 // ==========================================
+// SESSION VERIFICATION AND LOGOUT
+// ==========================================
+
+// GET  /api/session-state/me
+// POST /api/session-state/logout
+
+app.use(
+  "/api/session-state",
+  sessionRoutes
+);
+
+// ==========================================
 // PRODUCT ROUTES
 // ==========================================
+
+// GET /api/products
+// Other product operations remain in
+// your existing productRoutes.js.
 
 app.use(
   "/api/products",
@@ -293,17 +319,25 @@ app.use(
 // CUSTOMER ORDER ROUTES
 // ==========================================
 
+// POST /api/orders
+// GET  /api/orders/my
+//
+// Uses existing orderRoutes.js.
+// Orders are saved to MongoDB.
+
 app.use(
   "/api/orders",
   orderRoutes
 );
 
 // ==========================================
-// ADMIN ROUTES
+// EXISTING ADMIN ROUTES
 // ==========================================
 
-// Actual admin authorization is enforced
-// inside adminRoutes.js.
+// Preserve the existing admin features,
+// including customer and product management.
+//
+// Authorization is handled in adminRoutes.js.
 
 app.use(
   "/api/admin",
@@ -311,15 +345,28 @@ app.use(
 );
 
 // ==========================================
+// ADMIN ORDER MANAGEMENT
+// ==========================================
+
+// GET   /api/admin-orders
+// PATCH /api/admin-orders/:id/status
+//
+// requireAuth and requireAdmin are enforced
+// inside adminOrderRoutes.js.
+
+app.use(
+  "/api/admin-orders",
+  adminOrderRoutes
+);
+
+// ==========================================
 // API 404 HANDLER
 // ==========================================
 
 app.use("/api", (req, res) => {
-
   res.status(404).json({
     message: "API endpoint not found"
   });
-
 });
 
 // ==========================================
@@ -327,8 +374,6 @@ app.use("/api", (req, res) => {
 // ==========================================
 
 if (fs.existsSync(clientDist)) {
-
-  // Serve CSS, JavaScript and other assets.
   app.use(
     express.static(clientDist, {
       index: false
@@ -336,29 +381,47 @@ if (fs.existsSync(clientDist)) {
   );
 
   // React Router fallback.
-  // Supports /login, /admin, /shop etc.
-  app.get("*", (req, res) => {
+  // Express 4 supports the "*" route.
+  // Express 5 requires a named wildcard.
 
+  const reactFallback = (req, res) => {
     res.sendFile(
-      path.join(
-        clientDist,
-        "index.html"
-      )
+      path.join(clientDist, "index.html")
     );
+  };
 
+  const expressMajor = Number(
+    (
+      express?.application?.version ||
+      ""
+    ).split(".")[0]
+  );
+
+  // Use middleware fallback to avoid wildcard
+  // incompatibilities between Express 4 and 5.
+  // API requests have already been handled above.
+
+  app.use((req, res, next) => {
+    if (
+      req.method !== "GET" &&
+      req.method !== "HEAD"
+    ) {
+      return next();
+    }
+
+    if (req.path.startsWith("/api/")) {
+      return next();
+    }
+
+    reactFallback(req, res);
   });
-
 } else {
-
   app.get("/", (req, res) => {
-
     res.json({
       message:
         "Backend running. Run npm run build to generate React frontend."
     });
-
   });
-
 }
 
 // ==========================================
@@ -366,14 +429,40 @@ if (fs.existsSync(clientDist)) {
 // ==========================================
 
 app.use((error, req, res, next) => {
-
   console.error(
     "Server error:",
     error
   );
 
+  // Handle MongoDB transaction write conflicts.
+  if (
+    error.code === 112 ||
+    error.codeName === "WriteConflict"
+  ) {
+    return res.status(409).json({
+      message:
+        "Product stock changed. Please retry your order."
+    });
+  }
+
+  // Invalid MongoDB ObjectId.
+  if (error.name === "CastError") {
+    return res.status(400).json({
+      message: "Invalid record ID"
+    });
+  }
+
+  // MongoDB validation errors.
+  if (error.name === "ValidationError") {
+    return res.status(400).json({
+      message: error.message
+    });
+  }
+
   const status =
-    error.status >= 400 && error.status < 500
+    Number.isInteger(error.status) &&
+    error.status >= 400 &&
+    error.status < 500
       ? error.status
       : 500;
 
@@ -383,7 +472,6 @@ app.use((error, req, res, next) => {
         ? error.message
         : "Server error. Please try again."
   });
-
 });
 
 // ==========================================
@@ -391,16 +479,13 @@ app.use((error, req, res, next) => {
 // ==========================================
 
 async function startServer() {
-
   try {
-
     await connectDB();
 
     const server = app.listen(
       PORT,
       "0.0.0.0",
       () => {
-
         console.log(
           "===================================="
         );
@@ -409,9 +494,7 @@ async function startServer() {
           "CHAN'S CRACKERS SERVER RUNNING"
         );
 
-        console.log(
-          `Port: ${PORT}`
-        );
+        console.log(`Port: ${PORT}`);
 
         console.log(
           `Environment: ${
@@ -421,56 +504,48 @@ async function startServer() {
           }`
         );
 
-        console.log(
-          "MongoDB: Connected"
-        );
+        console.log("MongoDB: Connected");
 
         console.log(
           `Local website: http://localhost:${PORT}`
         );
 
         console.log(
-          "===================================="
+          "Customer Orders: /api/orders"
         );
 
+        console.log(
+          "Admin Orders: /api/admin-orders"
+        );
+
+        console.log(
+          "Session API: /api/session-state"
+        );
+
+        console.log(
+          "===================================="
+        );
       }
     );
 
     async function shutdown() {
-
       server.close(async () => {
-
         await mongoose.disconnect();
-
         await store.close();
-
         process.exit(0);
-
       });
-
     }
 
-    process.on(
-      "SIGINT",
-      shutdown
-    );
-
-    process.on(
-      "SIGTERM",
-      shutdown
-    );
-
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
   } catch (error) {
-
     console.error(
       "Startup failed:",
       error.message
     );
 
     process.exit(1);
-
   }
-
 }
 
 startServer();

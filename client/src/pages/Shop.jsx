@@ -1,220 +1,310 @@
 
-import React, { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  Search,
-  SlidersHorizontal,
-  ShoppingBag
-} from "lucide-react";
+  useCart,
+  money,
+  productId
+} from "../context/CartContext";
 
-import { useStore } from "../context/StoreContext";
-import { categories, getProductId } from "../data/categories";
-import PageBanner from "../components/PageBanner";
-import ProductCard from "../components/ProductCard";
-import "../catalog.css";
+const CATEGORIES = [
+  "Sparklers",
+  "Flower Pots",
+  "Ground Chakkars",
+  "Fountains",
+  "Rockets",
+  "Sky Shots",
+  "Gift Boxes",
+  "Family Combos",
+  "Kids Collection",
+  "Festival Specials",
+  "Combos"
+];
+
+function ProductImage({ product }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [product.image]);
+
+  return (
+    <div className="cc-shop-image">
+      {product.image && !failed ? (
+        <img
+          src={product.image}
+          alt={product.name}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="cc-shop-placeholder">
+          <span>✦</span>
+          <strong>CHAN'S CRACKERS</strong>
+          <small>{product.category}</small>
+        </div>
+      )}
+
+      {product.badge && (
+        <span className="cc-shop-badge">
+          {product.badge}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export default function Shop() {
-  const { products = [] } = useStore();
+  const { addItem, cartCount } = useCart();
 
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const [query, setQuery] = useState("");
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [category, setCategory] = useState("All");
+  const [search, setSearch] = useState("");
   const [sort, setSort] = useState("featured");
+  const [addedId, setAddedId] = useState("");
 
-  const selectedCategory =
-    searchParams.get("category") || "All";
+  useEffect(() => {
+    let mounted = true;
 
-  const changeCategory = (category) => {
-    if (category === "All") {
-      setSearchParams({});
-    } else {
-      setSearchParams({ category });
-    }
-  };
+    async function loadProducts() {
+      try {
+        const response = await fetch("/api/products", {
+          credentials: "include"
+        });
 
-  const filteredProducts = useMemo(() => {
-    const search = query.trim().toLowerCase();
+        const data = await response.json();
 
-    const result = products.filter((product) => {
-      if (product.isActive === false) {
-        return false;
+        if (!response.ok) {
+          throw new Error(
+            data.message || "Could not load products"
+          );
+        }
+
+        if (mounted) {
+          setProducts(
+            Array.isArray(data)
+              ? data
+              : Array.isArray(data.products)
+              ? data.products
+              : []
+          );
+        }
+      } catch (err) {
+        if (mounted) setError(err.message);
+      } finally {
+        if (mounted) setLoading(false);
       }
+    }
 
+    loadProducts();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const visibleProducts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    const filtered = products.filter((product) => {
       const matchesCategory =
-        selectedCategory === "All" ||
-        product.category === selectedCategory;
-
-      const searchableText = [
-        product.name,
-        product.category,
-        product.description
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+        category === "All" ||
+        product.category === category;
 
       const matchesSearch =
-        searchableText.includes(search);
+        !query ||
+        `${product.name} ${product.category} ${product.description || ""}`
+          .toLowerCase()
+          .includes(query);
 
       return matchesCategory && matchesSearch;
     });
 
-    result.sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       if (sort === "low") {
-        return a.price - b.price;
+        return Number(a.price) - Number(b.price);
       }
 
       if (sort === "high") {
-        return b.price - a.price;
+        return Number(b.price) - Number(a.price);
       }
 
       if (sort === "name") {
         return a.name.localeCompare(b.name);
       }
 
-      return Number(Boolean(b.featured)) -
-        Number(Boolean(a.featured));
+      return (
+        Number(Boolean(b.featured)) -
+        Number(Boolean(a.featured))
+      );
     });
+  }, [products, category, search, sort]);
 
-    return result;
-  }, [products, selectedCategory, query, sort]);
+  function handleAdd(product) {
+    addItem(product, 1);
+    setAddedId(productId(product));
+  }
 
   return (
-    <main>
-      <PageBanner
-        title="Explore Our Collection"
-        subtitle="Discover ten festive categories and find your favorite products."
-      />
+    <main className="page-shell content-page cc-shop">
+      <header className="section-heading">
+        <span className="eyebrow">
+          CHAN'S CRACKERS COLLECTION
+        </span>
 
-      <section className="section container">
-        <div className="catalog-shop-heading">
-          <div>
-            <span className="eyebrow">
-              THE COMPLETE COLLECTION
-            </span>
+        <h1>Shop Our Crackers</h1>
 
-            <h2>Find Your Favorites</h2>
-
-            <p>
-              Search, filter and explore the collection.
-            </p>
-          </div>
-
-          <div className="catalog-count">
-            <ShoppingBag size={21} />
-            <span>
-              {filteredProducts.length} Products
-            </span>
-          </div>
-        </div>
-
-        <div className="shop-toolbar catalog-toolbar">
-          <label className="search-field">
-            <Search size={20} />
-
-            <input
-              type="search"
-              aria-label="Search products"
-              placeholder="Search products or categories..."
-              value={query}
-              onChange={(event) =>
-                setQuery(event.target.value)
-              }
-            />
-          </label>
-
-          <label className="catalog-sort">
-            <SlidersHorizontal size={19} />
-
-            <select
-              aria-label="Sort products"
-              value={sort}
-              onChange={(event) =>
-                setSort(event.target.value)
-              }
-            >
-              <option value="featured">
-                Featured First
-              </option>
-
-              <option value="low">
-                Price: Low to High
-              </option>
-
-              <option value="high">
-                Price: High to Low
-              </option>
-
-              <option value="name">
-                Name: A to Z
-              </option>
-            </select>
-          </label>
-        </div>
-
-        <div className="category-filters catalog-filters">
-          {categories.map((category) => (
-            <button
-              type="button"
-              key={category}
-              className={`filter catalog-filter ${
-                selectedCategory === category
-                  ? "active"
-                  : ""
-              }`}
-              onClick={() =>
-                changeCategory(category)
-              }
-              aria-pressed={
-                selectedCategory === category
-              }
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-
-        <p className="results-count">
-          Showing {filteredProducts.length} of{" "}
-          {products.filter(
-            (product) => product.isActive !== false
-          ).length}{" "}
-          products
+        <p>
+          Explore our collection, compare prices
+          and add products to your cart.
         </p>
+      </header>
 
-        {filteredProducts.length > 0 ? (
-          <div className="product-grid catalog-product-grid">
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={getProductId(product)}
-                product={product}
-              />
-            ))}
+      <div className="cc-shop-controls">
+        <input
+          type="search"
+          placeholder="Search products..."
+          aria-label="Search products"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+
+        <select
+          value={category}
+          aria-label="Filter category"
+          onChange={(event) =>
+            setCategory(event.target.value)
+          }
+        >
+          <option value="All">All Categories</option>
+
+          {CATEGORIES.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={sort}
+          aria-label="Sort products"
+          onChange={(event) =>
+            setSort(event.target.value)
+          }
+        >
+          <option value="featured">Featured</option>
+          <option value="low">Price: Low to High</option>
+          <option value="high">Price: High to Low</option>
+          <option value="name">Name: A to Z</option>
+        </select>
+
+        <Link className="primary-btn" to="/cart">
+          Cart ({cartCount})
+        </Link>
+      </div>
+
+      {loading && <p>Loading products...</p>}
+
+      {error && (
+        <div className="alert-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <>
+          <div className="cc-shop-heading">
+            <h2>Available Products</h2>
+            <span>
+              Showing {visibleProducts.length} of{" "}
+              {products.length} products
+            </span>
           </div>
-        ) : (
-          <div className="catalog-empty">
-            <Search size={38} />
 
-            <h3>No products found</h3>
+          {visibleProducts.length === 0 ? (
+            <div className="empty-state">
+              <h3>No matching products</h3>
 
-            <p>
-              Try another category or search term.
-            </p>
+              <button
+                type="button"
+                className="outline-btn"
+                onClick={() => {
+                  setSearch("");
+                  setCategory("All");
+                }}
+              >
+                Show All Products
+              </button>
+            </div>
+          ) : (
+            <div className="cc-shop-grid">
+              {visibleProducts.map((product) => {
+                const id = productId(product);
+                const stock = Number(product.stock || 0);
+                const soldOut = stock <= 0;
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                setQuery("");
-                setSearchParams({});
-                setSort("featured");
-              }}
-            >
-              Show All Products
-            </button>
-          </div>
-        )}
-      </section>
+                return (
+                  <article className="cc-shop-card" key={id}>
+                    <Link
+                      to={`/product/${id}`}
+                      aria-label={`View ${product.name}`}
+                    >
+                      <ProductImage product={product} />
+                    </Link>
+
+                    <div className="cc-shop-details">
+                      <small>{product.category}</small>
+
+                      <h3>
+                        <Link to={`/product/${id}`}>
+                          {product.name}
+                        </Link>
+                      </h3>
+
+                      <p>
+                        {product.description ||
+                          "Quality festive collection from Chan's Crackers."}
+                      </p>
+
+                      <div className="cc-shop-price">
+                        <strong>{money(product.price)}</strong>
+
+                        {Number(product.oldPrice) >
+                          Number(product.price) && (
+                          <del>
+                            {money(product.oldPrice)}
+                          </del>
+                        )}
+                      </div>
+
+                      <div className="cc-shop-stock">
+                        {soldOut
+                          ? "Out of Stock"
+                          : `${stock} available`}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        disabled={soldOut || !id}
+                        onClick={() => handleAdd(product)}
+                      >
+                        {soldOut
+                          ? "Out of Stock"
+                          : addedId === id
+                          ? "Add Another +"
+                          : "+ Add to Cart"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
     </main>
   );
 }

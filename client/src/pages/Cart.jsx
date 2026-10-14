@@ -1,125 +1,134 @@
+
+import React from "react";
 import { Link } from "react-router-dom";
-import {
-  Trash2, Minus, Plus, ArrowRight, ShoppingBag
-} from "lucide-react";
-import {
-  useStore, money, imageFallback
-} from "../context/StoreContext";
-import PageBanner from "../components/PageBanner";
-import EmptyState from "../components/EmptyState";
+import { useCart, money } from "../context/CartContext";
 
 export default function Cart() {
   const {
-    cartItems,
-    cartTotal,
+    cart,
+    subtotal,
     updateQuantity,
-    removeFromCart,
-    user
-  } = useStore();
+    removeItem
+  } = useCart();
 
   return (
-    <>
-      <PageBanner
-        eyebrow="YOUR SELECTION"
-        title="Shopping Cart"
-        description="Review your favorite products before placing your demo order."
-      />
+    <main className="page-shell content-page">
+      <div className="section-heading">
+        <span className="eyebrow">YOUR SELECTION</span>
+        <h1>Shopping Cart</h1>
+        <p>
+          Review your products before dummy checkout.
+        </p>
+      </div>
 
-      <section className="section container">
-        {!cartItems.length ? (
-          <EmptyState
-            title="Your cart is waiting for something special"
-            description="Explore the collection and add your favorites."
-          />
-        ) : (
-          <div className="checkout-layout">
-            <div className="cart-list">
-              <h2>Your Items ({cartItems.length})</h2>
+      {cart.length === 0 ? (
+        <div className="empty-state">
+          <h2>Your Cart Is Empty</h2>
+          <p>
+            Add products from our collection to get started.
+          </p>
 
-              {cartItems.map(item => (
-                <div className="cart-item" key={item.productId}>
-                  <img
-                    src={item.image || imageFallback}
-                    alt={item.name}
-                  />
+          <Link to="/shop" className="primary-btn">
+            Explore Products
+          </Link>
+        </div>
+      ) : (
+        <div className="two-column">
+          <section className="panel">
+            <h2>Cart Items</h2>
 
-                  <div className="cart-item-info">
-                    <span>{item.category}</span>
-                    <Link to={`/product/${item.productId}`}>
-                      <h3>{item.name}</h3>
-                    </Link>
-                    <strong>{money(item.price)}</strong>
+            {cart.map((item) => (
+              <div className="cart-item" key={item.id}>
+                <div className="cart-item-info">
+                  <h3>{item.product.name}</h3>
+                  <p>{money(item.product.price)} each</p>
 
-                    <div className="quantity-picker small">
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.productId, item.quantity - 1)
-                        }
-                        aria-label="Decrease quantity"
-                      >
-                        <Minus size={15} />
-                      </button>
-                      <b>{item.quantity}</b>
-                      <button
-                        onClick={() =>
-                          updateQuantity(item.productId, item.quantity + 1)
-                        }
-                        disabled={item.quantity >= item.stock}
-                        aria-label="Increase quantity"
-                      >
-                        <Plus size={15} />
-                      </button>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => removeItem(item.id)}
+                  >
+                    Remove
+                  </button>
+                </div>
 
-                  <div className="cart-item-end">
-                    <strong>{money(item.price * item.quantity)}</strong>
+                <div className="cart-item-controls">
+                  <div className="quantity-control">
                     <button
-                      className="delete-icon"
-                      onClick={() => removeFromCart(item.productId)}
-                      aria-label="Remove product"
+                      type="button"
+                      onClick={() =>
+                        updateQuantity(
+                          item.id,
+                          item.quantity - 1
+                        )
+                      }
                     >
-                      <Trash2 size={18} />
+                      −
+                    </button>
+
+                    <span>{item.quantity}</span>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateQuantity(
+                          item.id,
+                          item.quantity + 1
+                        )
+                      }
+                      disabled={item.quantity >= 100}
+                    >
+                      +
                     </button>
                   </div>
-                </div>
-              ))}
 
-              <Link to="/shop" className="back-link">
-                <ShoppingBag size={17} /> Continue Shopping
-              </Link>
+                  <strong>
+                    {money(
+                      Number(item.product.price) *
+                        item.quantity
+                    )}
+                  </strong>
+                </div>
+              </div>
+            ))}
+          </section>
+
+          <aside className="panel">
+            <h2>Order Summary</h2>
+
+            <div className="summary-line">
+              <span>Subtotal</span>
+              <strong>{money(subtotal)}</strong>
             </div>
 
-            <aside className="summary-card">
-              <h3>Order Summary</h3>
-              <div className="summary-row">
-                <span>Subtotal</span>
-                <strong>{money(cartTotal)}</strong>
-              </div>
-              <div className="summary-row">
-                <span>Shipping</span>
-                <span>Demo only</span>
-              </div>
-              <div className="summary-total">
-                <span>Total</span>
-                <strong>{money(cartTotal)}</strong>
-              </div>
+            <div className="summary-line">
+              <span>Payment Type</span>
+              <span>Dummy Payment</span>
+            </div>
 
-              <Link
-                to={user ? "/checkout" : "/login"}
-                className="btn btn-primary btn-full"
-              >
-                {user ? "Proceed to Checkout" : "Login to Checkout"}
-                <ArrowRight size={18} />
-              </Link>
+            <hr />
 
-              <p className="small-note">
-                This is a demonstration. No actual payment is charged.
-              </p>
-            </aside>
-          </div>
-        )}
-      </section>
-    </>
+            <div className="summary-line summary-total">
+              <strong>Total</strong>
+              <strong>{money(subtotal)}</strong>
+            </div>
+
+            <Link
+              to="/checkout"
+              className="primary-btn full-width"
+            >
+              Proceed to Checkout →
+            </Link>
+
+            <Link
+              to="/shop"
+              className="outline-btn full-width"
+            >
+              Continue Shopping
+            </Link>
+          </aside>
+        </div>
+      )}
+    </main>
   );
 }

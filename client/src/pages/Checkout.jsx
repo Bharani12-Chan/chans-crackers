@@ -1,162 +1,215 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, ArrowRight, CheckCircle2,
-  MapPin, ShieldCheck
-} from "lucide-react";
-import { useStore, money } from "../context/StoreContext";
-import EmptyState from "../components/EmptyState";
-import PageBanner from "../components/PageBanner";
+
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { useCart, money } from "../context/CartContext";
+import { api } from "../context/StoreContext";
+
+const emptyAddress = {
+  fullName: "",
+  phone: "",
+  line1: "",
+  city: "",
+  state: "",
+  pincode: ""
+};
 
 export default function Checkout() {
   const {
-    user, cartItems, cartTotal,
-    clearCart, api, refreshProducts
-  } = useStore();
+    cart,
+    subtotal,
+    clearCart
+  } = useCart();
 
-  const navigate = useNavigate();
+  const [address, setAddress] = useState(emptyAddress);
+  const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
-    fullName: user?.name || "",
-    phone: "",
-    line1: "",
-    city: "",
-    state: "Tamil Nadu",
-    pincode: ""
-  });
 
-  async function placeOrder(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    setError("");
+
+    if (loading || !cart.length) return;
+
     setLoading(true);
+    setError("");
 
     try {
-      await api("/orders", {
+      const data = await api("/api/orders", {
         method: "POST",
         body: JSON.stringify({
-          items: cartItems.map(item => ({
-            productId: item.productId,
+          items: cart.map((item) => ({
+            productId: item.id,
             quantity: item.quantity
           })),
-          address: form
+          address
         })
       });
 
+      if (!data.order?._id) {
+        throw new Error("Order confirmation missing");
+      }
+
+      setOrder(data.order);
       clearCart();
-      await refreshProducts();
-      navigate("/dashboard?ordered=1", { replace: true });
-    } catch (error) {
-      setError(error.message);
+      window.scrollTo(0, 0);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }
 
+  if (order) {
+    return (
+      <main className="page-shell content-page">
+        <div className="success-panel">
+          <div className="success-icon">✓</div>
+
+          <h1>Demo Order Confirmed!</h1>
+
+          <p>
+            Your order has been saved in MongoDB.
+            No real payment was charged.
+          </p>
+
+          <div className="order-reference">
+            Order ID: {order._id}
+          </div>
+
+          <h2>{money(order.total)}</h2>
+
+          <p>
+            Payment Status:{" "}
+            <strong>{order.paymentStatus}</strong>
+          </p>
+
+          <Link to="/dashboard" className="primary-btn">
+            View My Orders →
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (!cart.length) {
+    return (
+      <main className="page-shell content-page">
+        <div className="empty-state">
+          <h2>Your Cart Is Empty</h2>
+          <Link to="/shop" className="primary-btn">
+            Go Shopping
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <>
-      <PageBanner
-        eyebrow="FINAL STEP"
-        title="Checkout"
-        description="Confirm your details and place your demonstration order."
-      />
+    <main className="page-shell content-page">
+      <div className="section-heading">
+        <span className="eyebrow">FINAL STEP</span>
+        <h1>Demo Checkout</h1>
+        <p>
+          Enter delivery details and confirm your sample order.
+        </p>
+      </div>
 
-      <section className="section container">
-        {!cartItems.length ? (
-          <EmptyState
-            title="Your cart is empty"
-            description="Add products before checking out."
-          />
-        ) : (
-          <form className="checkout-layout" onSubmit={placeOrder}>
-            <div className="checkout-form card-panel">
-              <h2><MapPin size={24} /> Delivery Information</h2>
-              <p className="muted">
-                These details are stored for the demo order only.
-              </p>
+      <div className="two-column">
+        <form className="panel" onSubmit={handleSubmit}>
+          <h2>Customer Details</h2>
 
-              {error && <div className="alert error">{error}</div>}
+          <div className="form-grid">
+            {[
+              ["fullName", "Full Name"],
+              ["phone", "Phone Number"],
+              ["line1", "Street Address"],
+              ["city", "City"],
+              ["state", "State"],
+              ["pincode", "PIN Code"]
+            ].map(([key, label]) => (
+              <label className="form-field" key={key}>
+                <span>{label}</span>
 
-              <div className="form-grid">
-                {[
-                  ["fullName", "Full Name"],
-                  ["phone", "Phone Number"],
-                  ["line1", "Address / Street"],
-                  ["city", "City"],
-                  ["state", "State"],
-                  ["pincode", "PIN Code"]
-                ].map(([key, label]) => (
-                  <label
-                    className={`field ${key === "line1" ? "wide" : ""}`}
-                    key={key}
-                  >
-                    {label}
-                    <input
-                      required
-                      value={form[key]}
-                      maxLength={key === "phone" ? 10 : key === "pincode" ? 6 : 200}
-                      pattern={
-                        key === "phone" ? "[0-9]{10}" :
-                        key === "pincode" ? "[0-9]{6}" : undefined
-                      }
-                      onChange={event =>
-                        setForm({ ...form, [key]: event.target.value })
-                      }
-                      placeholder={`Enter ${label.toLowerCase()}`}
-                    />
-                  </label>
-                ))}
-              </div>
+                <input
+                  name={key}
+                  placeholder={label}
+                  value={address[key]}
+                  onChange={(event) =>
+                    setAddress((previous) => ({
+                      ...previous,
+                      [key]: event.target.value
+                    }))
+                  }
+                  required
+                  maxLength={
+                    key === "pincode" ? 6 : 200
+                  }
+                  pattern={
+                    key === "phone"
+                      ? "[0-9]{10}"
+                      : key === "pincode"
+                      ? "[0-9]{6}"
+                      : undefined
+                  }
+                />
+              </label>
+            ))}
+          </div>
 
-              <div className="checkout-notice">
-                <ShieldCheck size={21} />
-                <div>
-                  <strong>Demonstration Checkout</strong>
-                  <p>
-                    No actual payment is processed. This creates a
-                    sample order in MongoDB for project demonstration.
-                  </p>
-                </div>
-              </div>
+          <div className="demo-payment-box">
+            <strong>✓ Dummy Payment</strong>
+            <p>
+              No card number, UPI, or real payment needed.
+            </p>
+          </div>
 
-              <Link to="/cart" className="back-link">
-                <ArrowLeft size={17} /> Back to Cart
-              </Link>
+          {error && (
+            <div className="alert-error" role="alert">
+              {error}
             </div>
+          )}
 
-            <aside className="summary-card">
-              <h3>Your Order</h3>
+          <button
+            type="submit"
+            className="primary-btn full-width"
+            disabled={loading}
+          >
+            {loading
+              ? "Saving Order..."
+              : `Confirm Demo Payment · ${money(subtotal)}`}
+          </button>
+        </form>
 
-              {cartItems.map(item => (
-                <div className="summary-row" key={item.productId}>
-                  <span>{item.name} × {item.quantity}</span>
-                  <strong>{money(item.price * item.quantity)}</strong>
-                </div>
-              ))}
+        <aside className="panel">
+          <h2>Order Summary</h2>
 
-              <div className="summary-total">
-                <span>Total</span>
-                <strong>{money(cartTotal)}</strong>
-              </div>
+          {cart.map((item) => (
+            <div className="summary-line" key={item.id}>
+              <span>
+                {item.product.name} × {item.quantity}
+              </span>
 
-              <div className="checkout-steps">
-                <span><CheckCircle2 size={17} /> Review items</span>
-                <span><CheckCircle2 size={17} /> Enter details</span>
-                <span><CheckCircle2 size={17} /> Place demo order</span>
-              </div>
+              <strong>
+                {money(
+                  item.product.price * item.quantity
+                )}
+              </strong>
+            </div>
+          ))}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn btn-primary btn-full"
-              >
-                {loading ? "Placing Order..." : "Place Demo Order"}
-                <ArrowRight size={18} />
-              </button>
-            </aside>
-          </form>
-        )}
-      </section>
-    </>
+          <hr />
+
+          <div className="summary-line summary-total">
+            <strong>Total</strong>
+            <strong>{money(subtotal)}</strong>
+          </div>
+
+          <p className="muted">
+            The backend verifies product prices and stock
+            before saving the order.
+          </p>
+        </aside>
+      </div>
+    </main>
   );
 }

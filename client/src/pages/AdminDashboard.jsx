@@ -1,125 +1,186 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard, Package, ShoppingBag, Users,
-  Plus, Pencil, Trash2, LogOut, Menu, X,
-  TrendingUp, AlertTriangle, Search, ArrowLeft,
-  Save, RefreshCw, Sparkles, CheckCircle2
-} from "lucide-react";
 
-import {
-  useStore, money, imageFallback
-} from "../context/StoreContext";
-import StatCard from "../components/StatCard";
-import EmptyState from "../components/EmptyState";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { api, useStore } from "../context/StoreContext";
+import { money } from "../context/CartContext";
 
-const blankProduct = {
+const CATEGORIES = [
+  "Sparklers",
+  "Flower Pots",
+  "Ground Chakkars",
+  "Fountains",
+  "Rockets",
+  "Sky Shots",
+  "Gift Boxes",
+  "Family Combos",
+  "Kids Collection",
+  "Festival Specials",
+  "Combos"
+];
+
+const emptyProduct = {
   name: "",
   category: "Sparklers",
   description: "",
   price: "",
   oldPrice: "",
-  stock: "",
+  stock: "0",
   image: "",
   badge: "",
-  featured: false
+  featured: false,
+  isActive: true
 };
 
-const menuItems = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "products", label: "Products", icon: Package },
-  { id: "orders", label: "Orders", icon: ShoppingBag },
-  { id: "customers", label: "Customers", icon: Users }
-];
+function Picture({ src, alt }) {
+  const [failed, setFailed] = useState(false);
 
-const orderStatuses = ["Placed", "Processing", "Completed", "Cancelled"];
+  useEffect(() => setFailed(false), [src]);
+
+  return (
+    <div className="cc-admin-picture">
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={alt}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span>✦</span>
+      )}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
-  const { user, api, logout, refreshProducts } = useStore();
   const navigate = useNavigate();
+  const { session, logout } = useStore();
 
   const [tab, setTab] = useState("overview");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [stats, setStats] = useState({});
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
+
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const [form, setForm] = useState({ ...emptyProduct });
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(blankProduct);
   const [search, setSearch] = useState("");
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
 
-    try {
-      const [s, p, o, u] = await Promise.all([
-        api("/admin/stats"),
-        api("/admin/products"),
-        api("/admin/orders"),
-        api("/admin/users")
-      ]);
+    const results = await Promise.allSettled([
+      api("/api/products/admin/all"),
+      api("/api/admin-orders"),
+      api("/api/admin/customers")
+    ]);
 
-      setStats(s.stats || {});
-      setProducts(p.products || []);
-      setOrders(o.orders || []);
-      setCustomers(u.users || []);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
+    const errors = [];
+
+    if (results[0].status === "fulfilled") {
+      setProducts(results[0].value.products || []);
+    } else {
+      errors.push("Products: " + results[0].reason.message);
     }
-  }
+
+    if (results[1].status === "fulfilled") {
+      setOrders(results[1].value.orders || []);
+    } else {
+      errors.push("Orders: " + results[1].reason.message);
+    }
+
+    if (results[2].status === "fulfilled") {
+      setCustomers(results[2].value.customers || []);
+    } else {
+      errors.push("Customers: " + results[2].reason.message);
+    }
+
+    if (errors.length) setError(errors.join(" | "));
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  function showTab(next) {
-    setTab(next);
-    setSidebarOpen(false);
-    setError("");
-    setSuccess("");
-    setFormOpen(false);
+  const demoTotal = useMemo(
+    () => orders.reduce(
+      (sum, item) => sum + Number(item.total || 0),
+      0
+    ),
+    [orders]
+  );
+
+  const filteredProducts = products.filter((product) =>
+    `${product.name} ${product.category}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
+
+  function resetForm() {
+    setEditingId(null);
+    setForm({ ...emptyProduct });
   }
 
-  function newProduct() {
-    setEditingId(null);
-    setForm({ ...blankProduct });
-    setFormOpen(true);
+  function beginAdd() {
+    resetForm();
     setTab("products");
     setError("");
-    setSuccess("");
+    setMessage("");
+    setTimeout(() => {
+      document.getElementById("cc-product-editor")
+        ?.scrollIntoView({ behavior: "smooth" });
+    }, 0);
   }
 
-  function editProduct(product) {
+  function beginEdit(product) {
     setEditingId(product._id);
     setForm({
       name: product.name || "",
       category: product.category || "Sparklers",
       description: product.description || "",
       price: String(product.price ?? ""),
-      oldPrice: String(product.oldPrice ?? ""),
-      stock: String(product.stock ?? ""),
+      oldPrice: String(product.oldPrice ?? 0),
+      stock: String(product.stock ?? 0),
       image: product.image || "",
       badge: product.badge || "",
-      featured: Boolean(product.featured)
+      featured: Boolean(product.featured),
+      isActive: Boolean(product.isActive)
     });
-    setFormOpen(true);
     setTab("products");
-    setError("");
+    setMessage("");
+
+    setTimeout(() => {
+      document.getElementById("cc-product-editor")
+        ?.scrollIntoView({ behavior: "smooth" });
+    }, 0);
+  }
+
+  function updateField(event) {
+    const { name, value, type, checked } = event.target;
+    setForm((previous) => ({
+      ...previous,
+      [name]: type === "checkbox" ? checked : value
+    }));
   }
 
   async function saveProduct(event) {
     event.preventDefault();
-    setBusy(true);
+    if (saving) return;
+
+    setSaving(true);
     setError("");
-    setSuccess("");
+    setMessage("");
 
     try {
       const payload = {
@@ -129,683 +190,658 @@ export default function AdminDashboard() {
         stock: Number(form.stock)
       };
 
-      await api(
+      const url = editingId
+        ? `/api/products/admin/${editingId}`
+        : "/api/products/admin";
+
+      await api(url, {
+        method: editingId ? "PATCH" : "POST",
+        body: JSON.stringify(payload)
+      });
+
+      setMessage(
         editingId
-          ? `/admin/products/${editingId}`
-          : "/admin/products",
+          ? "Product updated successfully"
+          : "New product added successfully"
+      );
+
+      resetForm();
+
+      const data = await api("/api/products/admin/all");
+      setProducts(data.products || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleProduct(product) {
+    const action = product.isActive
+      ? "deactivate"
+      : "reactivate";
+
+    if (!window.confirm(
+      `${action} ${product.name}?`
+    )) return;
+
+    setBusy(product._id);
+    setError("");
+
+    try {
+      const data = await api(
+        `/api/products/admin/${product._id}`,
         {
-          method: editingId ? "PUT" : "POST",
-          body: JSON.stringify(payload)
+          method: "PATCH",
+          body: JSON.stringify({
+            isActive: !product.isActive
+          })
         }
       );
 
-      setSuccess(editingId
-        ? "Product updated successfully"
-        : "New product added successfully");
-
-      setFormOpen(false);
-      setEditingId(null);
-      setForm({ ...blankProduct });
-      await loadData();
-      await refreshProducts();
-    } catch (error) {
-      setError(error.message);
+      setProducts((previous) =>
+        previous.map((item) =>
+          item._id === product._id ? data.product : item
+        )
+      );
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
 
-  async function deleteProduct(product) {
-    if (!window.confirm(`Remove "${product.name}" from the shop?`)) {
-      return;
-    }
-
+  async function updateOrder(id, status) {
+    setBusy(id);
     setError("");
 
     try {
-      await api(`/admin/products/${product._id}`, {
-        method: "DELETE"
-      });
+      const data = await api(
+        `/api/admin-orders/${id}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status })
+        }
+      );
 
-      setSuccess("Product removed from storefront");
-      await loadData();
-      await refreshProducts();
-    } catch (error) {
-      setError(error.message);
+      setOrders((previous) =>
+        previous.map((order) =>
+          order._id === id
+            ? { ...order, status: data.order.status }
+            : order
+        )
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
     }
   }
 
-  async function updateOrderStatus(order, status) {
-    if (
-      status === "Cancelled" &&
-      !window.confirm("Cancel this order and restore its stock?")
-    ) {
-      return;
-    }
-
+  async function handleLogout() {
+    setBusy("logout");
     setError("");
-    setSuccess("");
 
-    try {
-      await api(`/admin/orders/${order._id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status })
-      });
-
-      setSuccess("Order status updated");
-      await loadData();
-      await refreshProducts();
-    } catch (error) {
-      setError(error.message);
-    }
-  }
-
-  async function signOut() {
     try {
       await logout();
-      navigate("/", { replace: true });
-    } catch (error) {
-      setError(error.message);
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
     }
   }
 
-  const visibleProducts = products.filter(product =>
-    `${product.name} ${product.category}`
-      .toLowerCase().includes(search.toLowerCase())
-  );
-
   return (
-    <div className="admin-shell">
-      <aside className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
-        <Link to="/" className="admin-brand">
-          <Sparkles size={27} />
-          <span>
-            <strong>CHAN'S</strong>
-            <small>ADMIN CONSOLE</small>
+    <main className="page-shell content-page cc-admin">
+      <header className="dashboard-header">
+        <div>
+          <span className="eyebrow">
+            CHAN'S CRACKERS ADMINISTRATION
           </span>
-        </Link>
-
-        <div className="sidebar-caption">MANAGEMENT</div>
-
-        <nav className="admin-menu">
-          {menuItems.map(item => {
-            const Icon = item.icon;
-
-            return (
-              <button
-                key={item.id}
-                className={tab === item.id ? "active" : ""}
-                onClick={() => showTab(item.id)}
-              >
-                <Icon size={20} /> {item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="sidebar-bottom">
-          <Link to="/" className="sidebar-link">
-            <ArrowLeft size={18} /> View Storefront
-          </Link>
-          <button onClick={signOut} className="sidebar-link">
-            <LogOut size={18} /> Log Out
-          </button>
+          <h1>Management Dashboard</h1>
+          <p>
+            Welcome, {session?.name || "Admin"}.
+            Manage your store from one place.
+          </p>
         </div>
-      </aside>
 
-      <div className="admin-main">
-        <header className="admin-topbar">
-          <div className="admin-top-left">
-            <button
-              className="mobile-menu admin-menu-toggle"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              aria-label="Toggle admin navigation"
-            >
-              {sidebarOpen ? <X /> : <Menu />}
-            </button>
+        <button
+          type="button"
+          className="logout-btn"
+          onClick={handleLogout}
+          disabled={busy === "logout"}
+        >
+          ↪ Logout
+        </button>
+      </header>
 
-            <div>
-              <span className="eyebrow">STORE MANAGEMENT</span>
-              <h2>{menuItems.find(item => item.id === tab)?.label}</h2>
-            </div>
-          </div>
+      <nav className="cc-admin-tabs" aria-label="Admin sections">
+        {[
+          ["overview", "Overview"],
+          ["products", "Products"],
+          ["orders", "Orders"],
+          ["customers", "Customers"]
+        ].map(([key, label]) => (
+          <button
+            type="button"
+            key={key}
+            className={tab === key ? "selected" : ""}
+            onClick={() => {
+              setTab(key);
+              setError("");
+              setMessage("");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
-          <div className="admin-profile">
-            <span className="admin-avatar">
-              {user?.name?.charAt(0).toUpperCase() || "A"}
-            </span>
-            <div>
-              <strong>{user?.name}</strong>
-              <small>Authorized Administrator</small>
-            </div>
-          </div>
-        </header>
+      {error && (
+        <div className="alert-error" role="alert">{error}</div>
+      )}
 
-        <div className="admin-content">
-          {error && <div className="alert error">{error}</div>}
-          {success && (
-            <div className="alert success">
-              <CheckCircle2 size={19} /> {success}
-            </div>
-          )}
+      {message && (
+        <p className="cc-admin-notice" role="status">
+          ✓ {message}
+        </p>
+      )}
 
-          {loading && <p className="muted">Refreshing dashboard data...</p>}
-
+      {loading ? (
+        <section className="panel">Loading dashboard...</section>
+      ) : (
+        <>
           {tab === "overview" && (
             <>
-              <div className="admin-welcome">
-                <div>
-                  <span className="eyebrow">GOOD TO SEE YOU</span>
-                  <h1>Welcome back, {user?.name?.split(" ")[0]}!</h1>
-                  <p>
-                    Manage products, track demo orders and monitor
-                    your storefront from one place.
-                  </p>
-                </div>
-                <button className="btn btn-gold" onClick={newProduct}>
-                  <Plus size={18} /> Add New Product
-                </button>
+              <div className="stats-grid">
+                {[
+                  ["Products", products.length],
+                  [
+                    "Active Products",
+                    products.filter((p) => p.isActive).length
+                  ],
+                  ["Registered Customers", customers.length],
+                  ["Customer Orders", orders.length],
+                  ["Demo Order Value", money(demoTotal)]
+                ].map(([label, value]) => (
+                  <div className="stat-card" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
               </div>
 
-              <div className="dashboard-stats">
-                <StatCard
-                  icon={Package}
-                  label="Active Products"
-                  value={stats.products || 0}
-                />
-                <StatCard
-                  icon={ShoppingBag}
-                  label="Total Orders"
-                  value={stats.orders || 0}
-                />
-                <StatCard
-                  icon={Users}
-                  label="Customers"
-                  value={stats.customers || 0}
-                />
-                <StatCard
-                  icon={TrendingUp}
-                  label="Demo Order Value"
-                  value={money(stats.revenue)}
-                />
-              </div>
+              <section className="panel">
+                <h2>Store Management</h2>
+                <p className="muted">
+                  Add products, check inventory, review
+                  customer orders and view registered users.
+                </p>
 
-              <div className="admin-two-column">
-                <div className="card-panel">
-                  <div className="panel-heading">
-                    <h3>Recent Orders</h3>
-                    <button
-                      className="text-button"
-                      onClick={() => showTab("orders")}
-                    >
-                      View All
-                    </button>
-                  </div>
-
-                  {orders.length ? (
-                    orders.slice(0, 5).map(order => (
-                      <div className="recent-row" key={order._id}>
-                        <div>
-                          <strong>{order.customer}</strong>
-                          <small>#{order._id.slice(-8).toUpperCase()}</small>
-                        </div>
-                        <span className={`status status-${order.status.toLowerCase()}`}>
-                          {order.status}
-                        </span>
-                        <strong>{money(order.total)}</strong>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="muted">No orders yet.</p>
-                  )}
-                </div>
-
-                <div className="card-panel">
-                  <div className="panel-heading">
-                    <h3>Store Insights</h3>
-                    <RefreshCw size={18} />
-                  </div>
-
-                  <div className="insight-line">
-                    <span><AlertTriangle size={19} /> Low Stock Products</span>
-                    <strong>{stats.lowStock || 0}</strong>
-                  </div>
-                  <div className="insight-line">
-                    <span><Package size={19} /> Listed Products</span>
-                    <strong>{stats.products || 0}</strong>
-                  </div>
-                  <div className="insight-line">
-                    <span><Users size={19} /> Registered Customers</span>
-                    <strong>{stats.customers || 0}</strong>
-                  </div>
+                <div className="cc-admin-actions">
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={beginAdd}
+                  >
+                    + Add New Product
+                  </button>
 
                   <button
-                    className="btn btn-outline btn-full"
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => setTab("orders")}
+                  >
+                    View Orders
+                  </button>
+
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    onClick={() => setTab("customers")}
+                  >
+                    View Customers
+                  </button>
+
+                  <button
+                    type="button"
+                    className="outline-btn"
                     onClick={loadData}
                   >
-                    <RefreshCw size={17} /> Refresh Dashboard
+                    Refresh Data
                   </button>
                 </div>
-              </div>
+              </section>
             </>
           )}
 
           {tab === "products" && (
             <>
-              <div className="panel-heading admin-section-head">
-                <div>
-                  <span className="eyebrow">INVENTORY CONTROL</span>
-                  <h2>Manage Products</h2>
-                  <p>Add products, update prices and manage stock.</p>
-                </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={newProduct}
-                >
-                  <Plus size={18} /> Add Product
-                </button>
-              </div>
+              <section
+                className="panel"
+                id="cc-product-editor"
+              >
+                <h2>
+                  {editingId ? "Edit Product" : "Add New Product"}
+                </h2>
 
-              {formOpen && (
-                <div className="card-panel product-editor">
-                  <div className="panel-heading">
-                    <div>
-                      <span className="eyebrow">
-                        {editingId ? "UPDATE LISTING" : "NEW LISTING"}
-                      </span>
-                      <h2>
-                        {editingId ? "Edit Product" : "Add New Product"}
-                      </h2>
-                    </div>
-                    <button
-                      className="icon-action"
-                      onClick={() => setFormOpen(false)}
-                    >
-                      <X size={21} />
-                    </button>
-                  </div>
-
-                  <form onSubmit={saveProduct}>
-                    <div className="form-grid">
-                      <label className="field wide">
-                        Product Name *
-                        <input
-                          required
-                          minLength={2}
-                          maxLength={150}
-                          value={form.name}
-                          onChange={event =>
-                            setForm({ ...form, name: event.target.value })
-                          }
-                          placeholder="Example: Premium Festive Gift Box"
-                        />
-                      </label>
-
-                      <label className="field">
-                        Category *
-                        <select
-                          value={form.category}
-                          onChange={event =>
-                            setForm({ ...form, category: event.target.value })
-                          }
-                        >
-                          <option>Sparklers</option>
-                          <option>Gift Boxes</option>
-                          <option>Combos</option>
-                        </select>
-                      </label>
-
-                      <label className="field">
-                        Product Badge
-                        <input
-                          maxLength={80}
-                          value={form.badge}
-                          onChange={event =>
-                            setForm({ ...form, badge: event.target.value })
-                          }
-                          placeholder="Bestseller / New Arrival"
-                        />
-                      </label>
-
-                      <label className="field">
-                        Selling Price (₹) *
-                        <input
-                          required
-                          type="number"
-                          min="1"
-                          step="0.01"
-                          value={form.price}
-                          onChange={event =>
-                            setForm({ ...form, price: event.target.value })
-                          }
-                          placeholder="999"
-                        />
-                      </label>
-
-                      <label className="field">
-                        Original Price (₹)
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={form.oldPrice}
-                          onChange={event =>
-                            setForm({ ...form, oldPrice: event.target.value })
-                          }
-                          placeholder="1499"
-                        />
-                      </label>
-
-                      <label className="field">
-                        Available Stock *
-                        <input
-                          required
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={form.stock}
-                          onChange={event =>
-                            setForm({ ...form, stock: event.target.value })
-                          }
-                          placeholder="50"
-                        />
-                      </label>
-
-                      <label className="field wide">
-                        Image URL
-                        <input
-                          type="url"
-                          value={form.image}
-                          onChange={event =>
-                            setForm({ ...form, image: event.target.value })
-                          }
-                          placeholder="https://example.com/product-image.jpg"
-                        />
-                      </label>
-
-                      <label className="field wide">
-                        Product Description
-                        <textarea
-                          rows={4}
-                          maxLength={2000}
-                          value={form.description}
-                          onChange={event =>
-                            setForm({
-                              ...form,
-                              description: event.target.value
-                            })
-                          }
-                          placeholder="Describe the product, package contents and features..."
-                        />
-                      </label>
-                    </div>
-
-                    <label className="check-field">
+                <form onSubmit={saveProduct}>
+                  <div className="cc-admin-form-grid">
+                    <label>
+                      Product Name *
                       <input
-                        type="checkbox"
-                        checked={form.featured}
-                        onChange={event =>
-                          setForm({
-                            ...form,
-                            featured: event.target.checked
-                          })
-                        }
+                        name="name"
+                        value={form.name}
+                        onChange={updateField}
+                        required
+                        maxLength={120}
                       />
-                      Show in Featured Collection on homepage
                     </label>
 
-                    {form.image && (
-                      <div className="image-preview">
-                        <img
-                          src={form.image}
-                          alt="Product preview"
-                          onError={event => {
-                            event.currentTarget.onerror = null;
-                            event.currentTarget.src = imageFallback;
-                          }}
-                        />
-                        <span>Image Preview</span>
-                      </div>
-                    )}
-
-                    <div className="form-actions">
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        onClick={() => setFormOpen(false)}
+                    <label>
+                      Category *
+                      <select
+                        name="category"
+                        value={form.category}
+                        onChange={updateField}
                       >
-                        Cancel
-                      </button>
-                      <button
-                        className="btn btn-primary"
-                        disabled={busy}
-                      >
-                        <Save size={18} />
-                        {busy
-                          ? "Saving..."
-                          : editingId ? "Save Changes" : "Publish Product"}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              <div className="card-panel">
-                <div className="panel-heading">
-                  <h3>Product Inventory ({visibleProducts.length})</h3>
-                  <div className="search-field compact">
-                    <Search size={17} />
-                    <input
-                      value={search}
-                      onChange={event => setSearch(event.target.value)}
-                      placeholder="Search inventory..."
-                    />
-                  </div>
-                </div>
-
-                {!visibleProducts.length ? (
-                  <EmptyState
-                    title="No products found"
-                    description="Use Add Product to create your first listing."
-                    action={null}
-                  />
-                ) : (
-                  <div className="table-scroll">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Product</th>
-                          <th>Category</th>
-                          <th>Price</th>
-                          <th>Stock</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleProducts.map(product => (
-                          <tr key={product._id}>
-                            <td>
-                              <div className="table-product">
-                                <img
-                                  src={product.image || imageFallback}
-                                  alt={product.name}
-                                />
-                                <div>
-                                  <strong>{product.name}</strong>
-                                  <small>
-                                    {product.featured ? "Featured" : "Standard"}
-                                  </small>
-                                </div>
-                              </div>
-                            </td>
-                            <td>{product.category}</td>
-                            <td><strong>{money(product.price)}</strong></td>
-                            <td>
-                              <span className={`status ${
-                                product.stock <= 5
-                                  ? "status-cancelled"
-                                  : "status-completed"
-                              }`}>
-                                {product.stock} left
-                              </span>
-                            </td>
-                            <td>
-                              <div className="table-actions">
-                                <button
-                                  onClick={() => editProduct(product)}
-                                  title="Edit product"
-                                >
-                                  <Pencil size={17} />
-                                </button>
-                                <button
-                                  className="danger"
-                                  onClick={() => deleteProduct(product)}
-                                  title="Remove product"
-                                >
-                                  <Trash2 size={17} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                        {CATEGORIES.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
                         ))}
-                      </tbody>
-                    </table>
+                      </select>
+                    </label>
+
+                    <label>
+                      Selling Price (₹) *
+                      <input
+                        name="price"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.price}
+                        onChange={updateField}
+                        required
+                      />
+                    </label>
+
+                    <label>
+                      Original Price (₹)
+                      <input
+                        name="oldPrice"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.oldPrice}
+                        onChange={updateField}
+                      />
+                    </label>
+
+                    <label>
+                      Available Stock *
+                      <input
+                        name="stock"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.stock}
+                        onChange={updateField}
+                        required
+                      />
+                    </label>
+
+                    <label>
+                      Badge
+                      <input
+                        name="badge"
+                        value={form.badge}
+                        onChange={updateField}
+                        placeholder="Best Seller"
+                      />
+                    </label>
+
+                    <label className="wide">
+                      Image URL *
+                      <input
+                        name="image"
+                        value={form.image}
+                        onChange={updateField}
+                        placeholder="https://example.com/image.jpg"
+                        required
+                      />
+                    </label>
+
+                    <label className="wide">
+                      Description
+                      <textarea
+                        name="description"
+                        value={form.description}
+                        onChange={updateField}
+                        rows={4}
+                      />
+                    </label>
                   </div>
-                )}
-              </div>
+
+                  <div className="cc-admin-checks">
+                    <label>
+                      <input
+                        type="checkbox"
+                        name="featured"
+                        checked={form.featured}
+                        onChange={updateField}
+                      />
+                      Featured Product
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        name="isActive"
+                        checked={form.isActive}
+                        onChange={updateField}
+                      />
+                      Visible in Shop
+                    </label>
+                  </div>
+
+                  <div className="cc-admin-actions">
+                    <button
+                      className="primary-btn"
+                      type="submit"
+                      disabled={saving}
+                    >
+                      {saving
+                        ? "Saving..."
+                        : editingId
+                        ? "Update Product"
+                        : "Add Product"}
+                    </button>
+
+                    <button
+                      className="outline-btn"
+                      type="button"
+                      onClick={resetForm}
+                    >
+                      Clear Form
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="panel">
+                <div className="panel-header">
+                  <h2>Product Inventory ({products.length})</h2>
+
+                  <button
+                    className="outline-btn"
+                    type="button"
+                    onClick={loadData}
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                <input
+                  className="cc-admin-search"
+                  type="search"
+                  placeholder="Search products..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+
+                <div className="cc-admin-product-list">
+                  {filteredProducts.map((product) => (
+                    <article
+                      className="cc-admin-product"
+                      key={product._id}
+                    >
+                      <Picture
+                        src={product.image}
+                        alt={product.name}
+                      />
+
+                      <div className="cc-admin-product-info">
+                        <h3>{product.name}</h3>
+                        <p>{product.category}</p>
+                        <strong>{money(product.price)}</strong>
+                        <p>
+                          Stock: {product.stock} ·{" "}
+                          {product.isActive
+                            ? "Active"
+                            : "Inactive"}
+                        </p>
+                      </div>
+
+                      <div className="cc-admin-product-buttons">
+                        <button
+                          className="outline-btn"
+                          type="button"
+                          onClick={() => beginEdit(product)}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          className="outline-btn"
+                          type="button"
+                          disabled={busy === product._id}
+                          onClick={() => toggleProduct(product)}
+                        >
+                          {product.isActive
+                            ? "Deactivate"
+                            : "Reactivate"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+
+                  {filteredProducts.length === 0 && (
+                    <p className="muted">
+                      No matching products.
+                    </p>
+                  )}
+                </div>
+              </section>
             </>
           )}
 
           {tab === "orders" && (
-            <>
-              <div className="admin-section-head">
-                <span className="eyebrow">ORDER OPERATIONS</span>
-                <h2>Customer Orders</h2>
-                <p>Review orders and update their progress.</p>
+            <section className="panel">
+              <div className="panel-header">
+                <h2>Customer Orders ({orders.length})</h2>
+
+                <button
+                  className="outline-btn"
+                  type="button"
+                  onClick={loadData}
+                >
+                  Refresh Orders
+                </button>
               </div>
 
-              <div className="card-panel">
-                {!orders.length ? (
-                  <EmptyState
-                    title="No orders yet"
-                    description="Customer demo orders will appear here."
-                    action={null}
-                  />
-                ) : (
-                  <div className="table-scroll">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Order</th>
-                          <th>Customer</th>
-                          <th>Items</th>
-                          <th>Total</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orders.map(order => (
-                          <tr key={order._id}>
-                            <td>
-                              <strong>#{order._id.slice(-8).toUpperCase()}</strong>
-                              <small className="table-subtext">
-                                {new Date(order.createdAt)
-                                  .toLocaleDateString("en-IN")}
-                              </small>
-                            </td>
-                            <td>
-                              <strong>{order.customer}</strong>
-                              <small className="table-subtext">{order.email}</small>
-                              <small className="table-subtext">
-                                {order.address?.city}, {order.address?.state}
-                              </small>
-                            </td>
-                            <td>
-                              {order.items.map((item, index) => (
-                                <small className="table-subtext" key={index}>
-                                  {item.name} × {item.quantity}
-                                </small>
-                              ))}
-                            </td>
-                            <td><strong>{money(order.total)}</strong></td>
-                            <td>
-                              <select
-                                className="status-select"
-                                value={order.status}
-                                disabled={order.status === "Cancelled"}
-                                onChange={event =>
-                                  updateOrderStatus(order, event.target.value)
-                                }
-                              >
-                                {orderStatuses.map(status => (
-                                  <option key={status}>{status}</option>
-                                ))}
-                              </select>
-                            </td>
-                          </tr>
+              {orders.length === 0 ? (
+                <div className="empty-state">
+                  No customer orders yet.
+                </div>
+              ) : (
+                <div className="order-list">
+                  {orders.map((order) => (
+                    <article
+                      className="order-card"
+                      key={order._id}
+                    >
+                      <div className="order-heading">
+                        <div>
+                          <h3>
+                            Order #
+                            {String(order._id)
+                              .slice(-8)
+                              .toUpperCase()}
+                          </h3>
+
+                          <p className="muted">
+                            {new Date(
+                              order.createdAt
+                            ).toLocaleString("en-IN")}
+                          </p>
+                        </div>
+
+                        <select
+                          className="status-select"
+                          value={order.status}
+                          disabled={busy === order._id}
+                          onChange={(event) =>
+                            updateOrder(
+                              order._id,
+                              event.target.value
+                            )
+                          }
+                        >
+                          {[
+                            "Placed",
+                            "Processing",
+                            "Completed",
+                            "Cancelled"
+                          ].map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="customer-details">
+                        <strong>
+                          {order.customer ||
+                            order.user?.name ||
+                            "Customer"}
+                        </strong>
+
+                        <span>
+                          {order.email ||
+                            order.user?.email ||
+                            "—"}
+                        </span>
+
+                        <span>
+                          Phone: {order.address?.phone || "—"}
+                        </span>
+
+                        <span>
+                          {[
+                            order.address?.line1,
+                            order.address?.city,
+                            order.address?.state,
+                            order.address?.pincode
+                          ].filter(Boolean).join(", ")}
+                        </span>
+                      </div>
+
+                      <div className="order-products">
+                        {(order.items || []).map((item, i) => (
+                          <div
+                            className="summary-line"
+                            key={i}
+                          >
+                            <span>
+                              {item.name} × {item.quantity}
+                            </span>
+
+                            <strong>
+                              {money(
+                                Number(item.price) *
+                                Number(item.quantity)
+                              )}
+                            </strong>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </>
+                      </div>
+
+                      <div className="order-footer">
+                        <span>
+                          Payment:{" "}
+                          <strong>
+                            {order.paymentStatus || "Demo Only"}
+                          </strong>
+                        </span>
+
+                        <strong>{money(order.total)}</strong>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
 
           {tab === "customers" && (
-            <>
-              <div className="admin-section-head">
-                <span className="eyebrow">YOUR COMMUNITY</span>
-                <h2>Registered Customers</h2>
-                <p>
-                  Customer accounts are created through public registration.
-                  Admin accounts cannot be created here.
-                </p>
+            <section className="panel">
+              <div className="panel-header">
+                <h2>
+                  Registered Customers ({customers.length})
+                </h2>
+
+                <button
+                  className="outline-btn"
+                  type="button"
+                  onClick={loadData}
+                >
+                  Refresh Customers
+                </button>
               </div>
 
-              <div className="card-panel">
-                {!customers.length ? (
-                  <EmptyState
-                    title="No customers yet"
-                    description="New customer registrations will appear here."
-                    action={null}
-                  />
-                ) : (
-                  <div className="table-scroll">
-                    <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Customer</th>
-                          <th>Email</th>
-                          <th>Account</th>
-                          <th>Joined</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {customers.map(customer => (
-                          <tr key={customer._id}>
-                            <td><strong>{customer.name}</strong></td>
-                            <td>{customer.email}</td>
-                            <td>
-                              <span className="status status-completed">
-                                Customer
-                              </span>
-                            </td>
-                            <td>
-                              {new Date(customer.createdAt)
-                                .toLocaleDateString("en-IN")}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              <div className="cc-admin-table-wrap">
+                <table className="cc-admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Orders</th>
+                      <th>Demo Order Value</th>
+                      <th>Registered</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {customers.map((customer) => (
+                      <tr key={customer._id}>
+                        <td>{customer.name}</td>
+                        <td>{customer.email}</td>
+                        <td>{customer.orderCount}</td>
+                        <td>
+                          {money(customer.demoOrderValue)}
+                        </td>
+                        <td>
+                          {customer.createdAt
+                            ? new Date(
+                                customer.createdAt
+                              ).toLocaleDateString("en-IN")
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+
+                    {customers.length === 0 && (
+                      <tr>
+                        <td colSpan={5}>
+                          No registered customers found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </>
+            </section>
           )}
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+
+      <p className="muted center section-action">
+        All displayed payment amounts are simulated.
+        No real payment has been collected.
+      </p>
+    </main>
   );
 }

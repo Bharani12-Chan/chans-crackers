@@ -1,171 +1,192 @@
-import { useState } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { LockKeyhole, Mail, UserRound, Sparkles } from "lucide-react";
-import { useStore } from "../context/StoreContext";
 
-export default function Auth() {
-  const location = useLocation();
+import React, { useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { api, useStore } from "../context/StoreContext";
+
+export default function Auth({ register = false }) {
   const navigate = useNavigate();
-  const isRegister = location.pathname === "/register";
-
-  const { user, authLoading, login, register } = useStore();
+  const {
+    session,
+    refreshSession,
+    loadingSession
+  } = useStore();
 
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: ""
   });
-  const [error, setError] = useState("");
+
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  if (authLoading) {
-    return <div className="page-loader">Checking your session...</div>;
+  if (loadingSession) {
+    return (
+      <main className="page-shell content-page">
+        Loading...
+      </main>
+    );
   }
 
-  if (user) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} />;
+  if (session) {
+    return (
+      <Navigate
+        to={session.role === "admin" ? "/admin" : "/dashboard"}
+        replace
+      />
+    );
   }
 
-  async function submit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    setError("");
+    if (loading) return;
+
     setLoading(true);
+    setError("");
 
     try {
-      const account = isRegister
-        ? await register(form.name, form.email, form.password)
-        : await login(form.email, form.password);
+      const endpoint = register
+        ? "/api/auth/register"
+        : "/api/auth/login";
 
-      navigate(account.role === "admin" ? "/admin" : "/dashboard", {
-        replace: true
+      await api(endpoint, {
+        method: "POST",
+        body: JSON.stringify(
+          register
+            ? form
+            : {
+                email: form.email,
+                password: form.password
+              }
+        )
       });
-    } catch (error) {
-      setError(error.message);
+
+      const user = await refreshSession();
+
+      if (user) {
+        navigate(
+          user.role === "admin" ? "/admin" : "/dashboard",
+          { replace: true }
+        );
+      } else if (register) {
+        navigate("/login", { replace: true });
+      } else {
+        throw new Error(
+          "Login did not create a session. Check the existing auth route."
+        );
+      }
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <section className="auth-section">
-      <div className="container auth-layout">
-        <div className="auth-story">
-          <Sparkles size={37} />
-          <span className="eyebrow">WELCOME TO CHAN'S CRACKERS</span>
-          <h1>Celebrate more. Experience something special.</h1>
-          <p>
-            One account to explore the collection, manage your cart,
-            and follow every step of your order.
-          </p>
-          <div className="auth-story-image" />
-        </div>
-
-        <div className="auth-card">
+    <main className="page-shell content-page">
+      <div className="auth-panel">
+        <div className="section-heading">
           <span className="eyebrow">
-            {isRegister ? "JOIN OUR COMMUNITY" : "WELCOME BACK"}
+            CHAN'S CRACKERS
           </span>
-          <h2>{isRegister ? "Create Your Account" : "Sign In"}</h2>
+
+          <h1>
+            {register ? "Create Account" : "Welcome Back"}
+          </h1>
+
           <p>
-            {isRegister
-              ? "Register as a customer to begin shopping."
-              : "Enter your registered email and password."}
-          </p>
-
-          {error && <div className="alert error">{error}</div>}
-
-          <form onSubmit={submit} className="form-stack">
-            {isRegister && (
-              <label className="field">
-                Full Name
-                <span className="input-icon">
-                  <UserRound size={18} />
-                  <input
-                    required
-                    minLength={2}
-                    maxLength={100}
-                    value={form.name}
-                    onChange={event =>
-                      setForm({ ...form, name: event.target.value })
-                    }
-                    placeholder="Your full name"
-                  />
-                </span>
-              </label>
-            )}
-
-            <label className="field">
-              Email Address
-              <span className="input-icon">
-                <Mail size={18} />
-                <input
-                  required
-                  type="email"
-                  autoComplete="email"
-                  value={form.email}
-                  onChange={event =>
-                    setForm({ ...form, email: event.target.value })
-                  }
-                  placeholder="you@example.com"
-                />
-              </span>
-            </label>
-
-            <label className="field">
-              Password
-              <span className="input-icon">
-                <LockKeyhole size={18} />
-                <input
-                  required
-                  type="password"
-                  minLength={isRegister ? 10 : undefined}
-                  autoComplete={
-                    isRegister ? "new-password" : "current-password"
-                  }
-                  value={form.password}
-                  onChange={event =>
-                    setForm({ ...form, password: event.target.value })
-                  }
-                  placeholder="Enter your password"
-                />
-              </span>
-            </label>
-
-            {isRegister && (
-              <p className="small-note">
-                Customer accounts only. Admin access is restricted
-                to the authorized store administrator.
-              </p>
-            )}
-
-            <button
-              className="btn btn-primary btn-full"
-              disabled={loading}
-            >
-              {loading
-                ? "Please wait..."
-                : isRegister ? "Create Account" : "Sign In"}
-            </button>
-          </form>
-
-          <div className="auth-switch">
-            {isRegister ? (
-              <>
-                Already have an account?{" "}
-                <Link to="/login">Sign In</Link>
-              </>
-            ) : (
-              <>
-                New to Chan's Crackers?{" "}
-                <Link to="/register">Create Account</Link>
-              </>
-            )}
-          </div>
-
-          <p className="small-note center">
-            Administrators sign in using their existing authorized credentials.
+            {register
+              ? "Register to start shopping."
+              : "Log in to manage your orders."}
           </p>
         </div>
+
+        <form onSubmit={handleSubmit}>
+          {register && (
+            <label className="form-field">
+              <span>Full Name</span>
+
+              <input
+                value={form.name}
+                required
+                onChange={(event) =>
+                  setForm((previous) => ({
+                    ...previous,
+                    name: event.target.value
+                  }))
+                }
+                placeholder="Your name"
+              />
+            </label>
+          )}
+
+          <label className="form-field">
+            <span>Email</span>
+
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(event) =>
+                setForm((previous) => ({
+                  ...previous,
+                  email: event.target.value
+                }))
+              }
+              placeholder="you@example.com"
+            />
+          </label>
+
+          <label className="form-field">
+            <span>Password</span>
+
+            <input
+              type="password"
+              required
+              value={form.password}
+              onChange={(event) =>
+                setForm((previous) => ({
+                  ...previous,
+                  password: event.target.value
+                }))
+              }
+              placeholder="Enter password"
+            />
+          </label>
+
+          {error && (
+            <div className="alert-error" role="alert">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="primary-btn full-width"
+            disabled={loading}
+          >
+            {loading
+              ? "Please Wait..."
+              : register
+              ? "Create Account"
+              : "Login"}
+          </button>
+        </form>
+
+        <p className="auth-switch">
+          {register ? (
+            <>
+              Already registered?{" "}
+              <Link to="/login">Login</Link>
+            </>
+          ) : (
+            <>
+              New customer?{" "}
+              <Link to="/register">Create Account</Link>
+            </>
+          )}
+        </p>
       </div>
-    </section>
+    </main>
   );
 }
