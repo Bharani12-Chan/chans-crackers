@@ -6,25 +6,20 @@ const router = express.Router();
 
 router.get("/", async (req, res, next) => {
   try {
-    const { category, search } = req.query;
     const filter = { isActive: true };
 
-    if (category && category !== "All") {
-      filter.category = category;
-    }
-
-    if (search && typeof search === "string") {
-      filter.name = {
-        $regex: search.slice(0, 80).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        $options: "i"
-      };
+    if (
+      req.query.category &&
+      ["Sparklers", "Gift Boxes", "Combos"].includes(req.query.category)
+    ) {
+      filter.category = req.query.category;
     }
 
     const products = await Product.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(100);
+      .sort({ featured: -1, createdAt: -1 })
+      .limit(200);
 
-    res.json({ success: true, products });
+    res.json({ products });
   } catch (error) {
     next(error);
   }
@@ -33,10 +28,7 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid product ID"
-      });
+      return res.status(400).json({ message: "Invalid product ID" });
     }
 
     const product = await Product.findOne({
@@ -45,13 +37,10 @@ router.get("/:id", async (req, res, next) => {
     });
 
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found"
-      });
+      return res.status(404).json({ message: "Product not found" });
     }
 
-    res.json({ success: true, product });
+    res.json({ product });
   } catch (error) {
     next(error);
   }

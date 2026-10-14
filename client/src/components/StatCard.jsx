@@ -1,17 +1,11 @@
-import React from "react";
-import { LayoutDashboard } from "lucide-react";
-
-export default function StatCard({
-  icon: Icon = LayoutDashboard, title, value
-}) {
+export default function StatCard({ icon: Icon, label, value, detail }) {
   return (
     <div className="stat-card">
-      <div className="stat-icon">
-        <Icon size={24} />
-      </div>
+      <div className="stat-icon">{Icon && <Icon size={23} />}</div>
       <div>
-        <span>{title}</span>
+        <span>{label}</span>
         <strong>{value}</strong>
+        {detail && <small>{detail}</small>}
       </div>
     </div>
   );

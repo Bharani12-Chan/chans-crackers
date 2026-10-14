@@ -1,101 +1,98 @@
-import React, { useEffect, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
-  Sparkles, Search, ShoppingCart, User,
-  LogOut, Menu, X
+  Menu, X, ShoppingBag, UserRound,
+  Sparkles, LogOut
 } from "lucide-react";
 import { useStore } from "../context/StoreContext";
 
 export default function Navbar() {
-  const { cartCount, session, logout } = useStore();
+  const { user, cartCount, logout, setNotice } = useStore();
   const [open, setOpen] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => setOpen(false), [location.pathname]);
+  async function signOut() {
+    try {
+      await logout();
+      setNotice("You have logged out successfully");
+      navigate("/");
+    } catch (error) {
+      setNotice(error.message);
+    }
+  }
 
   return (
     <>
-      <div className="announcement">
-        <Sparkles size={14} />
-        Celebrate brighter with Chan's Crackers
-        <Sparkles size={14} />
+      <div className="top-strip">
+        Celebrate responsibly • Festive shopping demo • No real payments
       </div>
 
       <header className="site-header">
-        <div className="container nav-wrap">
-          <Link to="/" className="brand">
-            <span className="brand-icon">
-              <Sparkles size={23} />
+        <div className="container nav-inner">
+          <Link to="/" className="brand" onClick={() => setOpen(false)}>
+            <span className="brand-icon"><Sparkles size={24} /></span>
+            <span>
+              <strong>CHAN'S</strong>
+              <small>CRACKERS</small>
             </span>
-            <span>Chan's <strong>Crackers</strong></span>
           </Link>
 
-          <nav
-            className={`nav-links ${open ? "open" : ""}`}
-            aria-label="Main navigation"
+          <button
+            className="mobile-menu"
+            onClick={() => setOpen(!open)}
+            aria-label="Toggle navigation"
           >
-            <NavLink to="/">Home</NavLink>
-            <NavLink to="/shop">Shop</NavLink>
-            <Link to="/#about">About</Link>
-            <Link to="/#contact">Contact</Link>
+            {open ? <X /> : <Menu />}
+          </button>
+
+          <nav className={`nav-links ${open ? "open" : ""}`}>
+            <NavLink to="/" onClick={() => setOpen(false)}>Home</NavLink>
+            <NavLink to="/shop" onClick={() => setOpen(false)}>Shop</NavLink>
+
+            {user?.role === "customer" && (
+              <NavLink to="/dashboard" onClick={() => setOpen(false)}>
+                My Orders
+              </NavLink>
+            )}
+
+            {user?.role === "admin" && (
+              <NavLink to="/admin" onClick={() => setOpen(false)}>
+                Admin Panel
+              </NavLink>
+            )}
           </nav>
 
           <div className="nav-actions">
-            <button
-              className="icon-btn"
-              aria-label="Search products"
-              onClick={() => navigate("/shop")}
-            >
-              <Search size={21} />
-            </button>
-
-            <Link
-              to="/cart"
-              className="icon-btn cart-link"
-              aria-label={`Cart, ${cartCount} items`}
-            >
-              <ShoppingCart size={22} />
-              {cartCount > 0 && (
-                <span className="cart-count">{cartCount}</span>
-              )}
-            </Link>
-
-            <Link
-              className="icon-btn"
-              aria-label="My account"
-              to={
-                session
-                  ? session.role === "admin"
-                    ? "/admin"
-                    : "/dashboard"
-                  : "/login"
-              }
-            >
-              <User size={21} />
-            </Link>
-
-            {session && (
-              <button
-                className="icon-btn logout-btn"
-                aria-label="Logout"
-                onClick={() => {
-                  logout();
-                  navigate("/");
-                }}
-              >
-                <LogOut size={20} />
-              </button>
+            {user ? (
+              <>
+                <Link
+                  className="icon-action"
+                  to={user.role === "admin" ? "/admin" : "/dashboard"}
+                  title="Dashboard"
+                >
+                  <UserRound size={20} />
+                </Link>
+                <button
+                  className="icon-action"
+                  onClick={signOut}
+                  title="Log out"
+                >
+                  <LogOut size={19} />
+                </button>
+              </>
+            ) : (
+              <Link to="/login" className="btn btn-outline btn-sm">
+                Login
+              </Link>
             )}
 
-            <button
-              className="icon-btn mobile-toggle"
-              aria-label="Toggle navigation"
-              aria-expanded={open}
-              onClick={() => setOpen(!open)}
-            >
-              {open ? <X /> : <Menu />}
-            </button>
+            {user?.role !== "admin" && (
+              <Link to="/cart" className="cart-button">
+                <ShoppingBag size={19} />
+                <span>Cart</span>
+                <b>{cartCount}</b>
+              </Link>
+            )}
           </div>
         </div>
       </header>

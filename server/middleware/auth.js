@@ -1,23 +1,27 @@
 import User from "../models/User.js";
 
+export function safeUser(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role
+  };
+}
+
 export async function requireAuth(req, res, next) {
   try {
-    const userId = req.session?.userId;
-
-    if (!userId) {
+    if (!req.session?.userId) {
       return res.status(401).json({
-        success: false,
-        message: "Please log in to continue"
+        message: "Please log in first"
       });
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(req.session.userId);
 
     if (!user || !user.isActive) {
-      req.session.destroy(() => {});
       return res.status(401).json({
-        success: false,
-        message: "Your session is no longer valid"
+        message: "Session expired. Please log in again"
       });
     }
 
@@ -31,19 +35,9 @@ export async function requireAuth(req, res, next) {
 export function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") {
     return res.status(403).json({
-      success: false,
-      message: "Administrator access required"
+      message: "You are registered as a customer, not an admin"
     });
   }
 
   next();
-}
-
-export function publicUser(user) {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role
-  };
 }

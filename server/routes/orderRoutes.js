@@ -14,7 +14,7 @@ router.get("/my", async (req, res, next) => {
       user: req.user._id
     }).sort({ createdAt: -1 });
 
-    res.json({ success: true, orders });
+    res.json({ orders });
   } catch (error) {
     next(error);
   }
@@ -24,10 +24,13 @@ router.post("/", async (req, res, next) => {
   try {
     const { items, address } = req.body;
 
-    if (!Array.isArray(items) || !items.length || items.length > 50) {
+    if (
+      !Array.isArray(items) ||
+      items.length < 1 ||
+      items.length > 30
+    ) {
       return res.status(400).json({
-        success: false,
-        message: "Provide a valid cart"
+        message: "Your cart is empty or invalid"
       });
     }
 
@@ -38,44 +41,40 @@ router.post("/", async (req, res, next) => {
 
     if (
       !address ||
-      typeof address !== "object" ||
       fields.some(field =>
         typeof address[field] !== "string" ||
         !address[field].trim() ||
         address[field].length > 200
       ) ||
+      !/^\d{10}$/.test(address.phone) ||
       !/^\d{6}$/.test(address.pincode)
     ) {
       return res.status(400).json({
-        success: false,
-        message: "Provide complete delivery information"
+        message: "Enter complete and valid delivery details"
       });
     }
 
     const quantities = new Map();
 
     for (const item of items) {
-      const id = item.productId;
-
       if (
-        !mongoose.isValidObjectId(id) ||
+        !mongoose.isValidObjectId(item.productId) ||
         !Number.isInteger(item.quantity) ||
         item.quantity < 1 ||
         item.quantity > 100
       ) {
         return res.status(400).json({
-          success: false,
-          message: "Invalid cart item"
+          message: "Invalid product or quantity"
         });
       }
 
+      const id = String(item.productId);
       quantities.set(id, (quantities.get(id) || 0) + item.quantity);
     }
 
-    if ([...quantities.values()].some(quantity => quantity > 100)) {
+    if ([...quantities.values()].some(qty => qty > 100)) {
       return res.status(400).json({
-        success: false,
-        message: "Quantity limit exceeded"
+        message: "Maximum quantity exceeded"
       });
     }
 
@@ -86,8 +85,7 @@ router.post("/", async (req, res, next) => {
 
     if (products.length !== quantities.size) {
       return res.status(400).json({
-        success: false,
-        message: "One or more products are unavailable"
+        message: "Some products are no longer available"
       });
     }
 
@@ -100,11 +98,10 @@ router.post("/", async (req, res, next) => {
     }));
 
     const total = orderItems.reduce(
-      (sum, item) => sum + item.price * item.quantity, 0
+      (sum, item) => sum + item.price * item.quantity,
+      0
     );
 
-    // MongoDB Atlas supports transactions on replica-set clusters.
-    // Inventory and order creation succeed or fail together.
     const session = await mongoose.startSession();
     let order;
 
@@ -123,7 +120,7 @@ router.post("/", async (req, res, next) => {
 
           if (updated.modifiedCount !== 1) {
             const error = new Error(
-              `${item.name} does not have enough stock`
+              `Insufficient stock for ${item.name}`
             );
             error.status = 409;
             throw error;
@@ -140,7 +137,7 @@ router.post("/", async (req, res, next) => {
           ),
           total,
           status: "Placed",
-          paymentStatus: "Demo Success"
+          paymentStatus: "Demo Only"
         }], { session });
 
         order = created[0];
@@ -150,8 +147,7 @@ router.post("/", async (req, res, next) => {
     }
 
     res.status(201).json({
-      success: true,
-      message: "Demo order placed; no payment was charged",
+      message: "Demo order placed successfully. No payment was charged.",
       order
     });
   } catch (error) {

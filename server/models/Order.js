@@ -1,24 +1,17 @@
 import mongoose from "mongoose";
 
-const orderSchema = new mongoose.Schema({
+const schema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true
   },
-  customer: {
-    type: String,
-    required: true
-  },
-  email: {
-    type: String,
-    required: true
-  },
+  customer: String,
+  email: String,
   items: [{
     product: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Product",
-      required: true
+      ref: "Product"
     },
     name: String,
     image: String,
@@ -35,8 +28,7 @@ const orderSchema = new mongoose.Schema({
   },
   total: {
     type: Number,
-    required: true,
-    min: 0
+    required: true
   },
   status: {
     type: String,
@@ -45,9 +37,9 @@ const orderSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ["Demo Success"],
-    default: "Demo Success"
+    default: "Demo Only",
+    immutable: true
   }
 }, { timestamps: true });
 
-export default mongoose.model("Order", orderSchema);
+export default mongoose.model("Order", schema);

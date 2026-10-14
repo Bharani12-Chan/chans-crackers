@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 
-async function seedAdmin() {
+async function main() {
   try {
     const email = String(process.env.ADMIN_EMAIL || "")
       .trim().toLowerCase();
@@ -13,23 +13,31 @@ async function seedAdmin() {
     if (
       !process.env.MONGO_URI ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      !password ||
+      typeof password !== "string" ||
       password.length < 12 ||
       password.length > 72
     ) {
       throw new Error(
-        "Set MONGO_URI, ADMIN_EMAIL and a 12–72 character ADMIN_PASSWORD"
+        "Configure MONGO_URI, ADMIN_EMAIL and a 12–72 character ADMIN_PASSWORD"
       );
     }
 
     await mongoose.connect(process.env.MONGO_URI);
 
-    const existing = await User.findOne({ email });
+    const existingAdmin = await User.findOne({ role: "admin" });
 
-    if (existing) {
-      console.log("An account already exists for this email.");
-      console.log("No role or password changes were made.");
+    if (existingAdmin) {
+      console.log("An administrator already exists.");
+      console.log("No additional administrator was created.");
       return;
+    }
+
+    const existingEmail = await User.findOne({ email });
+
+    if (existingEmail) {
+      throw new Error(
+        "That email is already registered as a customer. Choose another admin email."
+      );
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -41,8 +49,7 @@ async function seedAdmin() {
       role: "admin"
     });
 
-    console.log("Initial admin account created successfully");
-    console.log("Admin email:", email);
+    console.log("Initial administrator created successfully.");
   } catch (error) {
     console.error("Admin setup failed:", error.message);
     process.exitCode = 1;
@@ -51,4 +58,4 @@ async function seedAdmin() {
   }
 }
 
-seedAdmin();
+main();

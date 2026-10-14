@@ -1,12 +1,10 @@
-import React from "react";
-
-export default function PageBanner({ title, subtitle }) {
+export default function PageBanner({ eyebrow, title, description }) {
   return (
     <section className="page-banner">
       <div className="container">
-        <span className="eyebrow">CHAN'S CRACKERS</span>
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
         <h1>{title}</h1>
-        {subtitle && <p>{subtitle}</p>}
+        {description && <p>{description}</p>}
       </div>
     </section>
   );

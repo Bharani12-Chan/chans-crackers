@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
-const userSchema = new mongoose.Schema({
+const schema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
@@ -23,7 +23,8 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: ["customer", "admin"],
-    default: "customer"
+    default: "customer",
+    immutable: true
   },
   isActive: {
     type: Boolean,
@@ -31,8 +32,8 @@ const userSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-userSchema.methods.checkPassword = function (password) {
+schema.methods.verifyPassword = function (password) {
   return bcrypt.compare(password, this.passwordHash);
 };
 
-export default mongoose.model("User", userSchema);
+export default mongoose.model("User", schema);

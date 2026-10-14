@@ -1,167 +1,310 @@
+
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
-  Sparkles, ArrowRight, ChevronLeft, ChevronRight,
-  ShieldCheck, Truck, Headphones, CreditCard,
+  Sparkles,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  Truck,
+  Headphones,
+  CreditCard,
   ShoppingBag
 } from "lucide-react";
-import { useStore, IMAGES } from "../context/StoreContext";
-import ProductCard from "../components/ProductCard";
+
+import { useStore } from "../context/StoreContext";
+import {
+  categories,
+  categoryImages,
+  getProductId
+} from "../data/categories";
+
 import SectionHeading from "../components/SectionHeading";
+import ProductCard from "../components/ProductCard";
+import "../catalog.css";
+
+const pics = {
+  hero:
+    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1600&q=85",
+
+  night:
+    "https://images.unsplash.com/photo-1467810563316-b5476525c0f9?auto=format&fit=crop&w=1600&q=85",
+
+  party:
+    "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=1600&q=85",
+
+  festival:
+    "https://images.unsplash.com/photo-1533236897111-3e94666b2edf?auto=format&fit=crop&w=1600&q=85",
+
+  spark:
+    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1600&q=85"
+};
 
 const slides = [
   {
-    eyebrow: "CELEBRATE EVERY MOMENT",
     title: "Make Every Night Sparkle",
-    description: "Explore beautiful festive collections for unforgettable celebrations.",
-    image: IMAGES.hero1
+    tag: "CELEBRATE EVERY MOMENT",
+    text: "Discover colorful collections and bring festive energy to every special occasion.",
+    image: pics.hero
   },
   {
-    eyebrow: "FESTIVAL COLLECTION",
-    title: "Bring Joy to Every Celebration",
-    description: "Find your favorite festive collections in one place.",
-    image: IMAGES.hero2
+    title: "Celebrate in Style",
+    tag: "FESTIVAL COLLECTIONS",
+    text: "Explore ten unique categories with exciting products and beautiful festive inspiration.",
+    image: pics.night
   },
   {
-    eyebrow: "SPECIAL CELEBRATION PICKS",
-    title: "Unbox the Magic",
-    description: "Make memorable moments with our curated collections.",
-    image: IMAGES.hero3
+    title: "Unbox the Celebration",
+    tag: "SPECIAL GIFT COLLECTIONS",
+    text: "Browse premium gift boxes, festive combos, and our featured celebration collection.",
+    image: pics.party
+  }
+];
+
+const benefits = [
+  {
+    Icon: ShieldCheck,
+    title: "Product Information",
+    text: "Browse product descriptions and stock details."
+  },
+  {
+    Icon: Truck,
+    title: "Order Tracking",
+    text: "Follow the progress of demo orders."
+  },
+  {
+    Icon: Headphones,
+    title: "Customer Experience",
+    text: "A simple, easy-to-use shopping interface."
+  },
+  {
+    Icon: CreditCard,
+    title: "Demo Checkout",
+    text: "Practice the complete checkout workflow."
   }
 ];
 
 export default function Home() {
-  const { products } = useStore();
-  const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const navigate = useNavigate();
+  const { products = [] } = useStore();
+  const [slide, setSlide] = useState(0);
 
   useEffect(() => {
-    if (paused) return;
-    const timer = setInterval(
-      () => setActive(index => (index + 1) % slides.length),
-      5500
+    const timer = window.setInterval(() => {
+      setSlide((current) => (current + 1) % slides.length);
+    }, 6000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const availableProducts = products.filter(
+    (product) => product.isActive !== false
+  );
+
+  const featuredProducts = [
+    ...availableProducts.filter((product) => product.featured),
+    ...availableProducts.filter((product) => !product.featured)
+  ].slice(0, 10);
+
+  const shopCategories = categories.filter(
+    (category) => category !== "All"
+  );
+
+  const previousSlide = () => {
+    setSlide((current) =>
+      (current - 1 + slides.length) % slides.length
     );
-    return () => clearInterval(timer);
-  }, [paused]);
+  };
+
+  const nextSlide = () => {
+    setSlide((current) =>
+      (current + 1) % slides.length
+    );
+  };
 
   return (
     <main>
-      <section
-        className="hero"
-        onMouseEnter={() => setPaused(true)}
-        onMouseLeave={() => setPaused(false)}
-      >
-        {slides.map((slide, index) => (
+      <section className="hero catalog-hero">
+        {slides.map((item, index) => (
           <div
-            key={index}
-            className={`hero-bg ${index === active ? "active" : ""}`}
-            style={{ backgroundImage: `url("${slide.image}")` }}
+            key={item.title}
+            className={`hero-bg ${
+              slide === index ? "active" : ""
+            }`}
+            style={{
+              backgroundImage: `url("${item.image}")`
+            }}
           />
         ))}
 
         <div className="container hero-content">
-          <div className="hero-copy" key={active}>
+          <div className="hero-copy" key={slide}>
             <span className="hero-eyebrow">
               <Sparkles size={18} />
-              {slides[active].eyebrow}
+              {slides[slide].tag}
             </span>
-            <h1>{slides[active].title}</h1>
-            <p>{slides[active].description}</p>
+
+            <h1>{slides[slide].title}</h1>
+
+            <p>{slides[slide].text}</p>
+
             <div className="hero-buttons">
               <Link className="btn btn-gold" to="/shop">
-                Shop Collection <ArrowRight size={19} />
+                Explore Products
+                <ArrowRight size={19} />
               </Link>
-              <a className="btn btn-outline-light" href="#featured">
-                Explore More
+
+              <a
+                className="btn btn-outline-light"
+                href="#categories"
+              >
+                View Categories
               </a>
+            </div>
+
+            <div className="catalog-hero-stats">
+              <div>
+                <strong>10</strong>
+                <span>Categories</span>
+              </div>
+
+              <div>
+                <strong>{availableProducts.length}</strong>
+                <span>Products</span>
+              </div>
+
+              <div>
+                <strong>100%</strong>
+                <span>Demo Experience</span>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="hero-controls">
           <button
+            type="button"
             aria-label="Previous slide"
-            onClick={() => setActive((active + slides.length - 1) % slides.length)}
+            onClick={previousSlide}
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft />
           </button>
-          {slides.map((_, index) => (
+
+          {slides.map((item, index) => (
             <button
-              key={index}
-              className={`hero-dot ${active === index ? "active" : ""}`}
+              type="button"
+              key={item.title}
+              className={`hero-dot ${
+                slide === index ? "active" : ""
+              }`}
               aria-label={`Show slide ${index + 1}`}
-              onClick={() => setActive(index)}
+              onClick={() => setSlide(index)}
             />
           ))}
+
           <button
+            type="button"
             aria-label="Next slide"
-            onClick={() => setActive((active + 1) % slides.length)}
+            onClick={nextSlide}
           >
-            <ChevronRight size={20} />
+            <ChevronRight />
           </button>
         </div>
       </section>
 
       <section className="features-strip">
         <div className="container features-grid">
-          {[
-            [ShieldCheck, "Quality Focused", "Curated festive collections"],
-            [Truck, "Order Tracking", "Follow demo order updates"],
-            [Headphones, "Customer Support", "Help when you need it"],
-            [CreditCard, "Easy Checkout", "Simple demo payment"]
-          ].map(([Icon, title, text]) => (
+          {benefits.map(({ Icon, title, text }) => (
             <div className="feature" key={title}>
               <Icon size={28} />
-              <div><strong>{title}</strong><span>{text}</span></div>
+
+              <div>
+                <strong>{title}</strong>
+                <span>{text}</span>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="section container">
+      <section
+        className="section container"
+        id="categories"
+      >
         <SectionHeading
-          eyebrow="EXPLORE OUR WORLD"
+          eyebrow="EXPLORE ALL COLLECTIONS"
           title="Shop by Category"
-          subtitle="Discover something special for every celebration."
+          subtitle="Ten different collections, all in one place."
         />
-        <div className="category-grid">
-          {[
-            ["Sparklers", IMAGES.sparkler, "Golden moments"],
-            ["Gift Boxes", IMAGES.celebration, "Special surprises"],
-            ["Combos", IMAGES.hero3, "Festival favorites"]
-          ].map(([name, image, subtitle]) => (
-            <button
+
+        <div className="category-grid catalog-category-grid">
+          {shopCategories.map((name, index) => (
+            <Link
+              className="category-card catalog-category-card"
               key={name}
-              className="category-card"
-              onClick={() => navigate(`/shop?category=${encodeURIComponent(name)}`)}
+              to={`/shop?category=${encodeURIComponent(name)}`}
             >
-              <img src={image} alt="" loading="lazy" />
+              <img
+                src={categoryImages[name]}
+                alt={`${name} celebration illustration`}
+                loading="lazy"
+              />
+
               <span className="category-overlay">
-                <small>{subtitle}</small>
+                <small>
+                  COLLECTION {String(index + 1).padStart(2, "0")}
+                </small>
+
                 <strong>{name}</strong>
-                <span>Explore <ArrowRight size={17} /></span>
+
+                <span>
+                  Explore Collection
+                  <ArrowRight size={17} />
+                </span>
               </span>
-            </button>
+            </Link>
           ))}
         </div>
       </section>
 
-      <section className="section section-soft" id="featured">
+      <section
+        className="section section-soft"
+        id="featured"
+      >
         <div className="container">
           <SectionHeading
-            eyebrow="CUSTOMER FAVORITES"
-            title="Our Featured Collection"
-            subtitle="Explore popular products for your next celebration."
+            eyebrow="DISCOVER OUR PRODUCTS"
+            title="Featured Collection"
+            subtitle="Browse our popular festive product listings."
           />
-          <div className="product-grid">
-            {products.slice(0, 4).map(product => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+
+          {featuredProducts.length > 0 ? (
+            <div className="product-grid catalog-product-grid">
+              {featuredProducts.map((product) => (
+                <ProductCard
+                  key={getProductId(product)}
+                  product={product}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="catalog-empty">
+              <ShoppingBag size={38} />
+              <h3>Products are coming soon</h3>
+              <p>
+                Add the predefined products to MongoDB
+                to display them here.
+              </p>
+            </div>
+          )}
+
           <div className="center-action">
-            <Link to="/shop" className="btn btn-primary">
-              View All Products <ArrowRight size={18} />
+            <Link
+              className="btn btn-primary"
+              to="/shop"
+            >
+              View All Products
+              <ArrowRight size={18} />
             </Link>
           </div>
         </div>
@@ -170,33 +313,72 @@ export default function Home() {
       <section className="container promo-wrap">
         <div className="promo">
           <div className="promo-content">
-            <span className="eyebrow">FESTIVE SPECIAL</span>
-            <h2>Let the Celebrations Begin!</h2>
-            <p>Explore our festive selection and find your next favorite.</p>
-            <Link className="btn btn-gold" to="/shop">
-              Explore Collection <ArrowRight size={18} />
+            <span className="eyebrow">
+              FESTIVAL SPECIAL
+            </span>
+
+            <h2>
+              Discover Your Next Celebration
+            </h2>
+
+            <p>
+              Explore sparklers, gift collections,
+              family combos, and more.
+            </p>
+
+            <Link
+              className="btn btn-gold"
+              to="/shop"
+            >
+              Shop Collection
+              <ArrowRight size={18} />
             </Link>
           </div>
-          <img src={IMAGES.celebration} alt="Colorful celebration" loading="lazy" />
+
+          <img
+            src={pics.party}
+            alt="Festive celebration decorations"
+            loading="lazy"
+          />
         </div>
       </section>
 
       <section className="section container" id="about">
         <SectionHeading
           eyebrow="THE CHAN'S EXPERIENCE"
-          title="Celebrate with Confidence"
-          subtitle="A modern shopping experience designed around convenience."
+          title="A Better Shopping Experience"
+          subtitle="A modern storefront with ten organized product categories."
         />
+
         <div className="benefit-grid">
           {[
-            [Sparkles, "Festive Collections", "Explore a curated product catalog."],
-            [ShieldCheck, "Clear Product Details", "Review prices and availability."],
-            [ShoppingBag, "Simple Shopping", "Discover, add to cart, and check out."]
-          ].map(([Icon, title, text]) => (
-            <div className="benefit-card" key={title}>
-              <div className="benefit-icon"><Icon size={27} /></div>
-              <h3>{title}</h3><p>{text}</p>
-            </div>
+            {
+              Icon: Sparkles,
+              title: "Beautiful Collections",
+              text: "Discover a wide variety of festive categories."
+            },
+            {
+              Icon: ShieldCheck,
+              title: "Clear Product Details",
+              text: "Explore descriptions, prices and stock."
+            },
+            {
+              Icon: ShoppingBag,
+              title: "Easy Shopping",
+              text: "Add products to your cart and create demo orders."
+            }
+          ].map(({ Icon, title, text }) => (
+            <article
+              className="benefit-card"
+              key={title}
+            >
+              <div className="benefit-icon">
+                <Icon size={27} />
+              </div>
+
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
           ))}
         </div>
       </section>
@@ -204,12 +386,23 @@ export default function Home() {
       <section className="newsletter">
         <div className="container newsletter-inner">
           <div>
-            <span className="eyebrow">STAY CONNECTED</span>
-            <h2>More Celebrations Await</h2>
-            <p>Discover our latest collections and seasonal favorites.</p>
+            <span className="eyebrow">
+              EXPLORE MORE
+            </span>
+
+            <h2>Ready to Explore?</h2>
+
+            <p>
+              Browse all ten categories in the shop.
+            </p>
           </div>
-          <Link to="/shop" className="btn btn-gold">
-            Start Shopping <ArrowRight size={18} />
+
+          <Link
+            to="/shop"
+            className="btn btn-gold"
+          >
+            Start Shopping
+            <ArrowRight size={18} />
           </Link>
         </div>
       </section>

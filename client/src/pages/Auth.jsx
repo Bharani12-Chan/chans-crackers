@@ -1,124 +1,171 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { AlertCircle, Crown, User, ArrowRight, Sparkles } from "lucide-react";
-import { useStore, IMAGES } from "../context/StoreContext";
+import { LockKeyhole, Mail, UserRound, Sparkles } from "lucide-react";
+import { useStore } from "../context/StoreContext";
 
-export default function Auth({ mode = "login" }) {
-  const { session, register, login } = useStore();
-  const navigate = useNavigate();
+export default function Auth() {
   const location = useLocation();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("customer");
+  const navigate = useNavigate();
+  const isRegister = location.pathname === "/register";
 
-  if (session) {
-    return <Navigate to={session.role === "admin" ? "/admin" : "/dashboard"} replace />;
+  const { user, authLoading, login, register } = useStore();
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: ""
+  });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  if (authLoading) {
+    return <div className="page-loader">Checking your session...</div>;
   }
 
-  const submit = event => {
+  if (user) {
+    return <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} />;
+  }
+
+  async function submit(event) {
     event.preventDefault();
+    setError("");
+    setLoading(true);
 
-    if (mode === "register") {
-      const success = register(name, email);
-      if (success) navigate("/dashboard");
-      return;
+    try {
+      const account = isRegister
+        ? await register(form.name, form.email, form.password)
+        : await login(form.email, form.password);
+
+      navigate(account.role === "admin" ? "/admin" : "/dashboard", {
+        replace: true
+      });
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
-
-    const account = login(email, role);
-    const destination = account.role === "admin"
-      ? "/admin"
-      : location.state?.from || "/dashboard";
-
-    navigate(destination);
-  };
+  }
 
   return (
-    <main className="auth-page">
-      <div className="auth-art">
-        <img src={IMAGES.hero1} alt="Celebration lights" />
-        <div>
-          <Sparkles size={39} />
-          <h2>Celebrate Every Moment</h2>
-          <p>Welcome to the Chan's Crackers experience.</p>
+    <section className="auth-section">
+      <div className="container auth-layout">
+        <div className="auth-story">
+          <Sparkles size={37} />
+          <span className="eyebrow">WELCOME TO CHAN'S CRACKERS</span>
+          <h1>Celebrate more. Experience something special.</h1>
+          <p>
+            One account to explore the collection, manage your cart,
+            and follow every step of your order.
+          </p>
+          <div className="auth-story-image" />
         </div>
-      </div>
 
-      <div className="auth-content">
         <div className="auth-card">
-          <span className="eyebrow">WELCOME TO CHAN'S</span>
-          <h1>{mode === "register" ? "Create Your Account" : "Welcome Back"}</h1>
-          <p className="muted">
-            {mode === "register"
-              ? "Join our celebration community."
-              : "Sign in to explore your account."}
+          <span className="eyebrow">
+            {isRegister ? "JOIN OUR COMMUNITY" : "WELCOME BACK"}
+          </span>
+          <h2>{isRegister ? "Create Your Account" : "Sign In"}</h2>
+          <p>
+            {isRegister
+              ? "Register as a customer to begin shopping."
+              : "Enter your registered email and password."}
           </p>
 
-          <div className="demo-alert">
-            <AlertCircle size={19} />
-            Frontend demonstration only. No password or
-            secure authentication is implemented.
-          </div>
+          {error && <div className="alert error">{error}</div>}
 
-          {mode === "login" && (
-            <div className="role-switch">
-              <button
-                type="button"
-                className={role === "customer" ? "active" : ""}
-                onClick={() => setRole("customer")}
-              >
-                <User size={17} /> Customer Demo
-              </button>
-              <button
-                type="button"
-                className={role === "admin" ? "active" : ""}
-                onClick={() => setRole("admin")}
-              >
-                <Crown size={17} /> Admin Demo
-              </button>
-            </div>
-          )}
-
-          <form className="auth-form" onSubmit={submit}>
-            {mode === "register" && (
+          <form onSubmit={submit} className="form-stack">
+            {isRegister && (
               <label className="field">
-                <span>Full Name</span>
-                <input
-                  required
-                  value={name}
-                  onChange={event => setName(event.target.value)}
-                  placeholder="Enter your full name"
-                />
+                Full Name
+                <span className="input-icon">
+                  <UserRound size={18} />
+                  <input
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    value={form.name}
+                    onChange={event =>
+                      setForm({ ...form, name: event.target.value })
+                    }
+                    placeholder="Your full name"
+                  />
+                </span>
               </label>
             )}
 
             <label className="field">
-              <span>Email Address</span>
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={event => setEmail(event.target.value)}
-                placeholder="Enter your email"
-              />
+              Email Address
+              <span className="input-icon">
+                <Mail size={18} />
+                <input
+                  required
+                  type="email"
+                  autoComplete="email"
+                  value={form.email}
+                  onChange={event =>
+                    setForm({ ...form, email: event.target.value })
+                  }
+                  placeholder="you@example.com"
+                />
+              </span>
             </label>
 
-            <button className="btn btn-primary btn-full" type="submit">
-              {mode === "register" ? "Create Demo Account" : "Enter Demo Dashboard"}
-              <ArrowRight size={18} />
+            <label className="field">
+              Password
+              <span className="input-icon">
+                <LockKeyhole size={18} />
+                <input
+                  required
+                  type="password"
+                  minLength={isRegister ? 10 : undefined}
+                  autoComplete={
+                    isRegister ? "new-password" : "current-password"
+                  }
+                  value={form.password}
+                  onChange={event =>
+                    setForm({ ...form, password: event.target.value })
+                  }
+                  placeholder="Enter your password"
+                />
+              </span>
+            </label>
+
+            {isRegister && (
+              <p className="small-note">
+                Customer accounts only. Admin access is restricted
+                to the authorized store administrator.
+              </p>
+            )}
+
+            <button
+              className="btn btn-primary btn-full"
+              disabled={loading}
+            >
+              {loading
+                ? "Please wait..."
+                : isRegister ? "Create Account" : "Sign In"}
             </button>
           </form>
 
-          <p className="auth-bottom">
-            {mode === "register"
-              ? "Already have an account?"
-              : "New to Chan's Crackers?"}
-            {" "}
-            <Link to={mode === "register" ? "/login" : "/register"}>
-              {mode === "register" ? "Sign In" : "Register"}
-            </Link>
+          <div className="auth-switch">
+            {isRegister ? (
+              <>
+                Already have an account?{" "}
+                <Link to="/login">Sign In</Link>
+              </>
+            ) : (
+              <>
+                New to Chan's Crackers?{" "}
+                <Link to="/register">Create Account</Link>
+              </>
+            )}
+          </div>
+
+          <p className="small-note center">
+            Administrators sign in using their existing authorized credentials.
           </p>
         </div>
       </div>
-    </main>
+    </section>
   );
 }
